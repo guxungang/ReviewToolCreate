@@ -42,7 +42,10 @@ sreview auto --manuscript <paper> [--supplement <appendix>] --mode author --effo
 ```
 
 `sreview auto` plans the run and executes every task (understanding, numbers, checks, public-concept
-literature search, blinded verification) in short-lived kernel-launched `claude -p` workers, then exports.
+literature search, blinded verification) in short-lived kernel-launched workers (`claude -p` for host
+claude, `codex exec` for host codex), then exports. A task ends `partial` only when its own job has a real
+gap (a core claim not assessed, no literature search succeeded); scope notes such as "figure values only in
+images" are listed but do not make the report partial.
 Each worker gets one task inline and no tools; this session stays small. Before starting, tell the user in
 two lines: the manuscript goes to the same provider as this session, searches carry public concepts only,
 no code runs, and worker cost is reported at the end.

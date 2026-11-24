@@ -11,6 +11,10 @@ from what it claims: the init event (tools, MCP servers, cwd) and every tool cal
 checked. Only a clean session is recorded `fresh` (+ blinded); anything else is recorded `inherited`.
 A fresh context of the same model family is not a statistically independent reviewer.
 
+Engines: `claude` (`claude -p`, tool-free, structured-output tool) and `codex` (`codex exec`, read-only
+sandbox in the staging directory, JSON answer in the final message). Codex keeps a read-only shell;
+its session counts as isolated only when the event stream shows no tool use at all.
+
 Model calls run in parallel threads (bounded by the run's max_concurrency, which the kernel also
 enforces at claim time); every claim, submit and release happens on the calling thread, one at a time.
 """
@@ -58,6 +62,116 @@ sentences from the manuscript. You have no tools; the kernel runs the searches. 
 the allowed providers (OpenAlex covers venues and citation-indexed work, arXiv covers preprints); the
 kernel re-runs a failed query on another allowed provider. Return the queries through the structured
 output tool."""
+
+
+CODEX_NOTE = """You are running under `codex exec` for this task. Do not run any command or read any
+file: everything you need is in this prompt. Answer with ONE JSON object only (no prose, no code fence)
+that matches this JSON schema:"""
+
+
+def find_codex() -> Optional[str]:
+    return shutil.which("codex")
+
+
+def find_binary(engine: str) -> Optional[str]:
+    return find_codex() if engine == "codex" else find_claude()
+
+
+def engine_for(cfg: dict, task_type: str) -> str:
+    host = cfg.get("host", {})
+    own, other = ("verify_worker", "analysis_worker") if task_type == "verify" else ("analysis_worker", "verify_worker")
+    eng = host.get(own) if host.get(own) not in (None, "none") else host.get(other)
+    return eng if eng in ("claude", "codex") else "claude"
+
+
+def _codex_command(binary: str, model: Optional[str], stage: Path) -> list[str]:
+    cmd = [binary, "exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only", "-C", str(stage),
+           "--output-last-message", str(stage / "last_message.txt")]
+    if model:
+        cmd += ["-m", model]
+    return cmd + ["-"]  # prompt on stdin
+
+
+def engine_command(engine: str, binary: str, schema: str, model: Optional[str], stage: Path) -> list[str]:
+    return _codex_command(binary, model, stage) if engine == "codex" else _command(binary, schema, model)
+
+
+def engine_prompt(engine: str, prompt: str, schema: str) -> str:
+    return prompt + "\n\n" + CODEX_NOTE + "\n" + schema if engine == "codex" else prompt
+
+
+def _json_from_text(text: str) -> Optional[dict]:
+    s = text.strip()
+    if s.startswith("```"):
+        s = s.split("\n", 1)[1] if "\n" in s else s
+        s = s.rsplit("```", 1)[0]
+    try:
+        v = json.loads(s)
+    except json.JSONDecodeError:
+        a, b = s.find("{"), s.rfind("}")
+        if a < 0 or b <= a:
+            return None
+        try:
+            v = json.loads(s[a:b + 1])
+        except json.JSONDecodeError:
+            return None
+    if isinstance(v, dict) and isinstance(v.get("output"), dict) and set(v) <= {"output", "usage"}:
+        v = v["output"]  # the task prompts show the submission envelope; accept it
+    return v if isinstance(v, dict) else None
+
+
+CODEX_TOOL_ITEMS = {"command_execution", "mcp_tool_call", "file_change", "web_search"}
+
+
+def inspect_codex_stream(lines: list[str], stage: Path) -> dict:
+    """Proof, usage and result from `codex exec --json` events plus the last-message file."""
+    problems: list[str] = []
+    thread_id, completed, failed = None, False, None
+    usage: dict = {}
+    last_text = ""
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        t = ev.get("type")
+        if t == "thread.started":
+            thread_id = ev.get("thread_id")
+        elif t in ("item.started", "item.completed"):
+            item = ev.get("item") or {}
+            it = item.get("type") or item.get("item_type")
+            if it in CODEX_TOOL_ITEMS:
+                problems.append(f"tool use in worker: {it}")
+            if it in ("agent_message", "assistant_message") and t == "item.completed":
+                last_text = item.get("text") or last_text
+        elif t == "turn.completed":
+            completed = True
+            u = ev.get("usage") or {}
+            usage = {"input_tokens": (u.get("input_tokens") or 0), "output_tokens": u.get("output_tokens")}
+        elif t in ("turn.failed", "error"):
+            failed = (ev.get("error") or {}).get("message") if isinstance(ev.get("error"), dict) else ev.get("message")
+    lm = stage / "last_message.txt"
+    if lm.exists():
+        last_text = lm.read_text("utf-8", errors="replace") or last_text
+    if thread_id is None:
+        problems.append("no thread.started event: session configuration unknown")
+    output = _json_from_text(last_text) if last_text else None
+    return {
+        "isolated": not problems and completed,
+        "problems": sorted(set(problems)),
+        "worker": "codex exec task worker v1 (inline bundle, read-only sandbox, no tool use observed)",
+        "model": None, "host_version": None, "session_id": thread_id,
+        "structured_output": output,
+        "is_error": bool(failed) or not completed,
+        "error_text": None if output else (failed or last_text[:500] or "no final message"),
+        "cost_usd": None,
+        "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"),
+        "duration_ms": None,
+    }
+
+
+def engine_inspect(engine: str, lines: list[str], stage: Path) -> dict:
+    return inspect_codex_stream(lines, stage) if engine == "codex" else inspect_stream(lines, stage)
 
 
 def find_claude() -> Optional[str]:
@@ -243,14 +357,15 @@ def _usage_sum(a: dict, b: dict) -> dict:
 
 
 def _finish(kernel, req: dict, stage: Path, outcome: Any, t0: float, errors_by_task: dict,
-            prior: Optional[dict] = None) -> dict:
+            prior: Optional[dict] = None, engine: str = "claude") -> dict:
     tid = req["task_id"]
     base = {"task_id": tid, "task_type": req["task_type"], "check_type": req.get("check_type"),
             "seconds": round(time.monotonic() - t0, 1)}
     if isinstance(outcome, SRError):
         return base | {"status": "worker_failed", "error": outcome.message,
                        **kernel.abandon(req["task_token"], outcome.message)}
-    proof = inspect_stream(outcome, stage)
+    proof = engine_inspect(engine, outcome, stage)
+    proof["engine"] = engine
     if prior:  # literature: the query-planning call is part of this task's usage
         proof = _usage_sum(prior, proof)
     entry = base | {"isolated": proof["isolated"], "problems": proof["problems"], "model": proof["model"],
@@ -276,17 +391,19 @@ def _finish(kernel, req: dict, stage: Path, outcome: Any, t0: float, errors_by_t
 
 
 def _run_literature(kernel, run_id, req, files, stage, binary, runner, timeout, model, errors_by_task,
-                    search_fetch) -> dict:
+                    search_fetch, engine: str = "claude") -> dict:
     """Two tool-free calls: plan public-concept queries, kernel searches, then judge the results."""
     t0 = time.monotonic()
     prompt_a = "\n\n".join([QUERY_HEADER,
                              "=== TASK INSTRUCTIONS ===\n" + Path(files["instructions"]).read_text("utf-8"),
                              "=== TASK CONTEXT (JSON) ===\n" + Path(files["context"]).read_text("utf-8")])
     try:
-        lines_a = runner(_command(binary or "claude", json.dumps(QUERY_SCHEMA), model), stage, timeout, prompt_a)
+        lines_a = runner(engine_command(engine, binary or engine, json.dumps(QUERY_SCHEMA), model, stage), stage,
+                         timeout, engine_prompt(engine, prompt_a, json.dumps(QUERY_SCHEMA)))
     except SRError as e:
         return _finish(kernel, req, stage, e, t0, errors_by_task)
-    plan = inspect_stream(lines_a, stage)
+    plan = engine_inspect(engine, lines_a, stage)
+    (stage / "last_message.txt").unlink(missing_ok=True)
     queries = (plan.get("structured_output") or {}).get("queries") or []
     ctx = json.loads(Path(files["context"]).read_text("utf-8"))
     results, notes = _search_all(kernel, run_id, queries, search_fetch, ctx.get("search_providers") or [])
@@ -297,11 +414,12 @@ def _run_literature(kernel, run_id, req, files, stage, binary, runner, timeout, 
         "\n\n=== LITERATURE SEARCHES (run by the kernel) ===\n" + json.dumps(searches, ensure_ascii=False)
     schema = json.dumps(json.loads(Path(files["output_schema"]).read_text("utf-8")))
     try:
-        lines_b = runner(_command(binary or "claude", schema, model), stage, timeout, prompt_b)
+        lines_b = runner(engine_command(engine, binary or engine, schema, model, stage), stage, timeout,
+                         engine_prompt(engine, prompt_b, schema))
     except SRError as e:
         lines_b = e
     prior = {k: plan.get(k) for k in ("input_tokens", "output_tokens", "cost_usd")}
-    entry = _finish(kernel, req, stage, lines_b, t0, errors_by_task, prior=prior)
+    entry = _finish(kernel, req, stage, lines_b, t0, errors_by_task, prior=prior, engine=engine)
     return entry | {"searches": [(r["provider"], r["status"], len(r["records"])) for r in results],
                     "search_problems": notes}
 
@@ -319,9 +437,13 @@ def run_workers(kernel, run_id: str, *, max_tasks: int = 20, timeout: int = 900,
     if not worker_task_types(cfg):
         raise SRError("invalid_input", "this run was planned without --analysis-worker/--verify-worker")
     timeout = min(timeout, LEASE_SECONDS - 120)
-    binary = binary or find_claude()
-    if runner is None and not binary:
-        raise SRError("missing_capability", "claude CLI not found (PATH or $CLAUDE_CODE_EXECPATH)")
+    engines = {engine_for(cfg, t) for t in worker_task_types(cfg)}
+    binaries = {e: binary or find_binary(e) for e in engines}
+    if runner is None:
+        missing = [e for e, b in binaries.items() if not b]
+        if missing:
+            raise SRError("missing_capability", f"worker CLI not found: {', '.join(missing)} "
+                          "(claude: PATH or $CLAUDE_CODE_EXECPATH; codex: PATH)")
     runner = runner or _subprocess_runner
     if parallel is None:
         parallel = int(bud.account_limits(kernel.ws.conn, run["budget_account_id"]).get("max_concurrency") or 1)
@@ -331,7 +453,7 @@ def run_workers(kernel, run_id: str, *, max_tasks: int = 20, timeout: int = 900,
     model = cfg["host"].get("worker_model")
     done: list[dict] = []
     errors_by_task: dict[str, list] = {}
-    inflight: dict[Future, tuple[dict, Path, float]] = {}
+    inflight: dict[Future, tuple[dict, Path, float, str]] = {}
     started = 0
     stop_reason = "no worker task ready"
     with ThreadPoolExecutor(max_workers=parallel) as pool:
@@ -346,25 +468,27 @@ def run_workers(kernel, run_id: str, *, max_tasks: int = 20, timeout: int = 900,
                         stop_reason = claim.get("reason") or f"run {claim.get('run_state')}: no worker task ready"
                     break
                 req, files = claim["task"], claim["files"]
+                engine = engine_for(cfg, req["task_type"])
+                bin_ = binaries.get(engine) or engine
                 stage = Path(tempfile.mkdtemp(prefix="sr-worker-", dir=staging_root))
                 if req["task_type"] == "literature":  # searches touch the store: run on this thread
                     try:
-                        done.append(_run_literature(kernel, run_id, req, files, stage, binary, runner, timeout,
-                                                    model, errors_by_task, search_fetch))
+                        done.append(_run_literature(kernel, run_id, req, files, stage, bin_, runner, timeout,
+                                                    model, errors_by_task, search_fetch, engine))
                     finally:
                         shutil.rmtree(stage, ignore_errors=True)
                     started += 1
                     continue
                 schema = json.dumps(json.loads(Path(files["output_schema"]).read_text("utf-8")))
-                prompt = build_prompt(req, files, errors_by_task.get(req["task_id"]))
-                cmd = _command(binary or "claude", schema, model)
+                prompt = engine_prompt(engine, build_prompt(req, files, errors_by_task.get(req["task_id"])), schema)
+                cmd = engine_command(engine, bin_, schema, model, stage)
 
                 def call(cmd=cmd, stage=stage, prompt=prompt):
                     try:
                         return runner(cmd, stage, timeout, prompt)
                     except SRError as e:
                         return e
-                inflight[pool.submit(call)] = (req, stage, time.monotonic())
+                inflight[pool.submit(call)] = (req, stage, time.monotonic(), engine)
                 started += 1
             if not inflight:
                 if started >= max_tasks:
@@ -372,9 +496,9 @@ def run_workers(kernel, run_id: str, *, max_tasks: int = 20, timeout: int = 900,
                 break
             finished, _ = wait(list(inflight), return_when=FIRST_COMPLETED)
             for fut in finished:
-                req, stage, t0 = inflight.pop(fut)
+                req, stage, t0, engine = inflight.pop(fut)
                 try:
-                    done.append(_finish(kernel, req, stage, fut.result(), t0, errors_by_task))
+                    done.append(_finish(kernel, req, stage, fut.result(), t0, errors_by_task, engine=engine))
                 finally:
                     shutil.rmtree(stage, ignore_errors=True)  # staging dir of the worker session
     status = kernel.status(run_id)

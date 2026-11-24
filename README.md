@@ -16,6 +16,19 @@ python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
 之后在 Claude Code 中输入 `/paper-preflight papers/draft.pdf，standard，中文输出`，或 `/paper-referee papers/submission.pdf，standard，使用 reviews/form.json`。Codex 使用 `--host codex`，入口为 `$paper-preflight` / `$paper-referee`。
 
+一条命令跑完整个流程，每个任务都在内核启动的短命 Worker 中执行：Claude 用 `claude -p`，Codex 用 `codex exec`。宿主只需读取紧凑的 JSON 结果：
+
+```bash
+sreview auto --manuscript paper.pdf --mode author --effort quick --host claude [--worker-model sonnet]
+```
+
+```bash
+sreview auto --manuscript submission.pdf --mode reviewer --effort standard --host codex \
+  --rubric form.json --scores --recommendation    # 审稿：按会议表单起草评分和建议，内核校验
+```
+
+`examples/rubrics/generic-ml-conference.json` 只是通用模板，**不是**任何会议的官方表单。评分与建议只出现在审稿人私有视图和编辑视图中，不进入给作者的视图，并且始终是草稿，不会自动提交。
+
 手动跑一遍内核（宿主 Agent 也是这样调用的）：
 
 ```bash
@@ -58,11 +71,11 @@ src/scholarly_review/
   modules/     解析与引文定位、数值核验、领域配置注册表、文献 Provider
   reports/     快照、覆盖统计、确定性报告模板与导出
   interfaces/  CLI 与共享服务函数
-  adapters/    宿主能力探测与 Skill 安装
+  adapters/    宿主能力探测与 Skill 安装、任务 Worker（claude -p / codex exec）、一条命令运行（auto）
   profiles/    generic / ml / systems / security 配置
   prompts/     每类任务的工作说明
   skill_sources/ 两个入口 Skill（安装时替换宿主入口符号）
-tests/          数值黄金用例、准入规则、预算并发、端到端与故障用例（40 项）
+tests/          数值黄金用例、准入规则、预算并发、端到端、Worker（Claude/Codex）与审稿表单用例
 schemas/        导出的 JSON Schema 2020-12
 docs/IMPLEMENTATION_STATUS.md  规范对照：已实现、偏离与未实现
 ```

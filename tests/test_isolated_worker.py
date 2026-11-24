@@ -287,3 +287,57 @@ def test_failed_searches_fall_back_to_another_permitted_provider(kernel, paper):
     # a provider the run does not permit is never used, even as a fallback
     results, notes = worker._search_all(k, run_id, qs[:1], fetch, ["arxiv"], sleep=lambda s: None)
     assert [r["provider"] for r in results] == ["arxiv"] and results[0]["status"] == "failed"
+
+
+def fake_codex_runner(result_for, *, tool_item=None, fenced=False):
+    """Simulates `codex exec --json ... -` : JSONL events on stdout, final answer in --output-last-message."""
+    calls = []
+
+    def run(cmd, cwd, timeout, stdin_text):
+        calls.append({"cmd": cmd, "cwd": cwd, "prompt": stdin_text})
+        prompt = stdin_text.split("\n\nYou are running under `codex exec`", 1)[0]
+        out = result_for(_ctx_from_prompt(prompt), prompt)
+        text = json.dumps(out)
+        if fenced:
+            text = "```json\n" + text + "\n```"
+        Path(cmd[cmd.index("--output-last-message") + 1]).write_text(text)
+        ev = [{"type": "thread.started", "thread_id": "th1"}, {"type": "turn.started"}]
+        if tool_item:
+            ev.append({"type": "item.completed", "item": {"id": "i0", "type": tool_item, "command": "cat x"}})
+        ev += [{"type": "item.completed", "item": {"id": "i1", "type": "agent_message", "text": text}},
+               {"type": "turn.completed", "usage": {"input_tokens": 30000, "cached_input_tokens": 0, "output_tokens": 900}}]
+        return [json.dumps(e) for e in ev]
+    run.calls = calls
+    return run
+
+
+def test_codex_engine_runs_the_whole_review(kernel, paper):
+    from scholarly_review.adapters import auto
+    k = kernel
+    params = {"input": {"manuscript": paper}, "mode": "author", "effort": "quick", "host": {"name": "codex"},
+              "scope": {"domain_profile": "ml-v1"}, "outputs": {"language": "en"}}
+    runner = fake_codex_runner(_analysis_result_lazy(k), fenced=True)
+    res = auto.auto(k, params=params, runner=runner, binary="codex", search_fetch=_no_network)
+    assert res["done"] is True and Path(res["files"]["report.md"]).exists()
+    call = runner.calls[0]
+    assert call["cmd"][:2] == ["codex", "exec"] and call["cmd"][-1] == "-"
+    assert call["cmd"][call["cmd"].index("--sandbox") + 1] == "read-only"
+    assert call["cmd"][call["cmd"].index("-C") + 1] == str(call["cwd"])
+    assert "Answer with ONE JSON object only" in call["prompt"] and '"properties"' in call["prompt"]
+    assert res["usage"]["worker_input_tokens"] >= 30000 and res["usage"]["worker_cost_usd"] == 0
+
+
+def test_codex_verify_is_fresh_only_without_tool_use(kernel, paper):
+    k = kernel
+    run_id, pv, _, _ = _prepare(k, paper, verify_worker="codex")
+    out = worker.run_workers(k, run_id, runner=fake_codex_runner(validated), binary="codex")
+    assert all(w["status"] == "submitted" and w["isolated"] for w in out["workers"])
+    v = k.ws.records(run_id, "verification")[0]
+    assert v["context_independence"] == "fresh" and v["blinded"] is True
+
+    run2, pv2, _, _ = _prepare(k, paper, verify_worker="codex")
+    out = worker.run_workers(k, run2, runner=fake_codex_runner(validated, tool_item="command_execution"),
+                             binary="codex")
+    assert out["workers"][0]["isolated"] is False and "command_execution" in out["workers"][0]["problems"][0]
+    v = k.ws.records(run2, "verification")[0]
+    assert v["context_independence"] == "inherited"  # a shell call could have read anything

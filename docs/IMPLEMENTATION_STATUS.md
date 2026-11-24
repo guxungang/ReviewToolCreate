@@ -37,16 +37,14 @@
 
 ## 尚未实现（按里程碑）
 
-- **managed 执行**（`codex exec` 和 `claude -p` Worker）、`reservation_bounded` 费用控制：整个 Run 的 managed 模式仍在 plan 阶段返回 `missing_capability`（M3）。复核任务已经可以交给隔离 Worker 执行，见下文“隔离复核 Worker”。
-- **MCP STDIO 服务**：服务函数已与 CLI 共用（`interfaces/service.py`），MCP 外壳待加（M3）。
-- **LaTeX、DOCX 解析，OCR，表格单元格结构化，PDF 渲染回看，bbox**：v0.1 只做文本 PDF、Markdown、TXT 的纯文本抽取（M1 余项和 M4）。
-- **代码索引与静态检查、隔离沙箱实验执行**：reproduction 档只生成 ExperimentPlan，代码执行一律拒绝（M4）。
-- **跨版本复用与 stale 传播（E06）、主张/表格/代码跨版本匹配**：`compare` 目前只比较文本块（M4）。
-- **E02 远程调用未知结果**：账本已有 `pending_reconciliation` 状态，但只有 managed Worker 才会用到。
-- **E13 进程树终止**：interactive 模式下，取消只作用于内核签发的任务（`tool_calls_only`），宿主侧的残留会如实列出。
-- **editor_note、评分和决定生成**：只有提供有效评分表时才应生成，v0.1 未实现，评分状态显示为未评估。
-- **学术质量评测**（§16.4：30 个评测集合、双人标注、精确率和召回率）：尚未开展，因此**不能宣称审稿质量已经达到目标**。
-- **真实 PDF 与真实宿主的端到端测试**：目前只用合成 Markdown 稿件和模拟宿主提交做过测试。
+- **整个 Run 的 managed 执行与 `reservation_bounded` 费用控制：** interactive 模式下，所有任务已经可以交给内核启动的 Worker 执行（`sreview auto`，引擎为 `claude -p` 或 `codex exec`）。但 `execution_mode=managed` 仍在 plan 阶段返回 `missing_capability`，费用也只是事后上报，没有预留上限（M3）。
+- **MCP STDIO 服务：** 服务函数已与 CLI 共用（`interfaces/service.py`），MCP 外壳还没加（M3）。
+- **解析能力不足：** 不支持 LaTeX、DOCX、OCR，表格没有单元格结构，PDF 不能渲染回看，没有 bbox。目前只能从文本 PDF、Markdown、TXT 抽取纯文本，图中的数值读不到（M1 余项和 M4）。
+- **代码相关：** 没有代码索引、静态检查和隔离沙箱实验执行。reproduction 档只生成 ExperimentPlan（M4）。
+- **跨版本：** 跨版本复用、stale 传播（E06）、主张/表格/代码的跨版本匹配都没做。`compare` 只比较文本块（M4）。
+- **E02 远程调用结果未知、E13 进程树终止：** 只在 managed 模式下才会用到。
+- **Codex 引擎未在真实 CLI 上验证：** 按 `codex exec --json --sandbox read-only --output-last-message` 的公开接口实现，测试使用模拟输出流。本机没有安装 codex，首次真实运行需要确认参数和事件格式。
+- **学术质量评测（§16.4）规模不够：** 规范要求 30 个评测集合、双人标注，并给出精确率和召回率。目前只做过 4 篇论文、14 个植入缺陷的小规模评测，见下文，**不能宣称审稿质量已经达标**。
 
 ## 真实论文试运行（2026-11-22，arXiv 1706.03762，quick，作者模式，Claude Code 担任宿主）
 
@@ -169,6 +167,42 @@
 4. **已知仍存在：** ResNet 定位误差那条，Worker 取错了输入（26.9/8.9，原文是 25.3/9.0）。内核发现输入不在引文中，只报了问题，没有误判为矛盾。
 
 测试共 78 个，全部通过。
+
+## 文献回退、partial 语义、审稿表单、Codex Worker、版本控制（2026-11-24）
+
+1. **文献检索回退**（`adapters/worker._search_all`）：
+   - 某个查询失败后，换另一个**已获许可**的 Provider 重跑一次，绝不使用未许可的来源。
+   - 同一 Provider 失败两次后，剩下的查询不再发给它（熔断）。
+   - 每次 arXiv 请求至少间隔 3 秒，arXiv 的超时放宽到 35 秒。
+   - 查询规划的提示词要求把查询分散到各个 Provider。
+   - 起因：ResNet 那次运行的 4 个 arXiv 查询全部超时或被限流，OpenAlex 一次都没被尝试。
+2. **partial 只表示真实缺口：**
+   - 任务里的 `not_checked` 改记为范围说明（`scope_notes`），例如图中数值无法读取、没有代码。
+   - 只有内核按任务类型判定的 `blocking_gaps` 才会让任务成为 partial：
+     - claim-evidence 有核心主张没有评估；
+     - 文献检索没有一次成功；
+     - 复核没有覆盖全部发现；
+     - 检查什么都没看。
+3. **审稿表单草稿**（新任务类型 `assess`）：
+   - 触发条件：审稿模式，提供了有效的会议表单，并且加了 `--scores` 或 `--recommendation`。所有检查和复核结束后，内核再追加这个任务。
+   - 内核会拒绝以下提交：
+     - 分值不在表单量表内，或标准不存在；
+     - 必填标准没有给分；
+     - 引用了未进入报告的发现；
+     - 没有已确认的 major/critical 问题却选择最负面的建议；
+     - 存在已确认的 critical 问题却选择最正面的建议；
+     - 建议没有引用它所依据的严重问题。
+   - 评分、建议和给编辑的保密意见只出现在审稿人私有视图和编辑视图中，给作者的视图里没有。
+   - 没有表单时不会生成评分，量表也不会凭空编造。
+4. **Codex Worker：**
+   - `--analysis-worker codex` 和 `--verify-worker codex`；`sreview auto --host codex` 默认使用 codex 引擎。
+   - 运行方式：`codex exec --json --skip-git-repo-check --sandbox read-only -C <临时目录> --output-last-message`，任务包通过 stdin 传入。
+   - 输出 Schema 写在提示词里，不走结构化输出参数。原因是 Codex 的严格 Schema 表达不了自由格式的数值 `inputs`。模型返回 JSON 后由内核解析和校验，被拒时带着错误列表重试。
+   - Codex 保留了只读 shell。只有事件流里完全没有工具调用（命令、MCP、文件修改、网页搜索）时，复核才记为 `fresh`，否则记为 `inherited`。
+   - Codex 只上报 token，不上报费用。
+5. **版本控制：** 项目已用 git 管理。未发表稿件的试运行报告（`trial_reports/`）和安装生成的 `.claude/` 都在 `.gitignore` 里；状态文档里与保密稿件相关的细节已经去掉。
+
+测试共 84 个，全部通过。
 
 ## 上游与许可
 

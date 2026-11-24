@@ -21,11 +21,21 @@ never search the title or distinctive sentences; searches carry public technical
 
 ```bash
 sreview auto --manuscript <submission> [--supplement <appendix>] --mode reviewer --effort <e> --domain ml-v1 \
-  --language en [--cutoff YYYY-MM-DD] [--rubric form.json] [--expertise general|generalist|specialist] \
-  --host {{HOST}} [--worker-model sonnet]
+  --language en [--cutoff YYYY-MM-DD] [--rubric form.json --scores --recommendation] \
+  [--expertise general|generalist|specialist] --host {{HOST}} [--worker-model <model>]
 ```
 
-Every task runs in a short-lived kernel-launched `claude -p` worker (one task each, inline, no tools);
+**Review form:** only if the reviewer supplies the venue's form as rubric JSON (criteria, `score_scales`,
+optional `decision_options` ordered from most negative to most positive), add `--scores` and/or
+`--recommendation`. After all checks a final task drafts the form; the kernel rejects values outside the
+form's scales, scores or recommendations that cite findings not in the report, the most negative option
+without a confirmed major/critical concern, and the most positive one while a confirmed critical concern
+stands. `examples/rubrics/generic-ml-conference.json` is a generic template, not a venue form: say so if
+the reviewer uses it. The draft appears as `review_form_draft` in the result and in the reviewer-private
+and editor views, never in the authors' view. It is a draft for the reviewer to adopt or edit.
+
+Every task runs in a short-lived kernel-launched worker (`claude -p` for host claude, `codex exec` for host
+codex; one task each, bundle inline);
 this session stays small. Run it in the foreground with a 10-minute timeout, never in the background; while
 the result says `"done": false`, run the printed `next`. When done, answer from the returned JSON
 (`readiness`, `top_items`, `coverage`, `awaiting_user_confirmation`, `usage`, `files`), then export the
@@ -116,7 +126,8 @@ sreview export --run <run_id> --audience editor     # only if the reviewer asks 
 ```
 
 Explain: Summary, Strengths, Major Concerns, Minor Comments, Questions, References; which concerns are
-confirmed vs open questions; coverage limits. Do not compute a recommendation from issue counts. Do not
+confirmed vs open questions; coverage limits. A recommendation exists only as the validated form draft
+(`--recommendation` with a venue form); never compute one yourself from issue counts. Do not
 include unverified misconduct allegations anywhere.
 
 ## Boundaries

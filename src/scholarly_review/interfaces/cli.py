@@ -59,9 +59,9 @@ def _add_plan_flags(sp: argparse.ArgumentParser) -> None:
     sp.add_argument("--manuscript")
     sp.add_argument("--supplement", action="append")
     sp.add_argument("--paper-version", dest="paper_version")
-    sp.add_argument("--verify-worker", dest="verify_worker", choices=["none", "claude"],
+    sp.add_argument("--verify-worker", dest="verify_worker", choices=["none", "claude", "codex"],
                     help="run verification tasks in an isolated `claude -p` worker launched by the kernel")
-    sp.add_argument("--analysis-worker", dest="analysis_worker", choices=["none", "claude"],
+    sp.add_argument("--analysis-worker", dest="analysis_worker", choices=["none", "claude", "codex"],
                     help="run analysis tasks (understand, numeric, checks) in short-lived kernel-launched workers")
     sp.add_argument("--worker-model", dest="worker_model")
     sp.add_argument("--mode", choices=["author", "reviewer"])

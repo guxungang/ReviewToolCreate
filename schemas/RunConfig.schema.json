@@ -272,9 +272,20 @@
           "default": "none",
           "enum": [
             "none",
-            "claude"
+            "claude",
+            "codex"
           ],
           "title": "Verify Worker",
+          "type": "string"
+        },
+        "analysis_worker": {
+          "default": "none",
+          "enum": [
+            "none",
+            "claude",
+            "codex"
+          ],
+          "title": "Analysis Worker",
           "type": "string"
         },
         "worker_model": {

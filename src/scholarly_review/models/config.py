@@ -29,10 +29,10 @@ class HostSpec(Strict):
     required_capabilities: list[str] = Field(default_factory=list)
     # Extension (spec §5.2): verification tasks run by a kernel-launched isolated worker even in
     # interactive mode; the host never claims them.
-    verify_worker: Literal["none", "claude"] = "none"
+    verify_worker: Literal["none", "claude", "codex"] = "none"
     # Analysis tasks (understand, numeric, checks, reproduction plans) in short-lived workers as well:
     # each worker gets one task bundle inline, so the host context no longer grows task by task.
-    analysis_worker: Literal["none", "claude"] = "none"
+    analysis_worker: Literal["none", "claude", "codex"] = "none"
     worker_model: Optional[str] = None
 
 

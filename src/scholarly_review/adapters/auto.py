@@ -71,8 +71,9 @@ def auto(kernel, *, params: Optional[dict] = None, project_config: Optional[dict
     if run_id is None:
         params = dict(params or {})
         host = dict(params.get("host") or {})
-        host.setdefault("analysis_worker", "claude")
-        host.setdefault("verify_worker", "claude")
+        default_engine = "codex" if host.get("name") == "codex" else "claude"
+        host.setdefault("analysis_worker", default_engine)
+        host.setdefault("verify_worker", host["analysis_worker"])
         params["host"] = host
         res = kernel.plan(params, project_config, paper_version_id)
         run_id = res["run_id"]

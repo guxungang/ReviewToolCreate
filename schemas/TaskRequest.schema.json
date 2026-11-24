@@ -67,6 +67,7 @@
         "literature",
         "verify",
         "reproduce_plan",
+        "assess",
         "report"
       ],
       "title": "Task Type",
