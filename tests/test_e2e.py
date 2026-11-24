@@ -6,7 +6,7 @@ import pytest
 
 from scholarly_review.core.errors import SRError
 from scholarly_review.reports import render
-from tests.conftest import block_with, empty_check, plan_and_start, run_claims, understand_output
+from tests.conftest import block_with, core_handlers, empty_check, plan_and_start, run_claims, understand_output
 
 
 def claim(k, run_id):
@@ -106,7 +106,7 @@ def test_full_author_flow(kernel, paper):
                            "analyzed_block_ids": [b], "not_checked": []}}
 
     seen, last = run_to_end(k, run_id, pv, {"numeric.consistency": numeric_h, "verify": verify_h,
-                                            "ml.ablation_attribution": ablation_h})
+                                            "ml.ablation_attribution": ablation_h, **core_handlers(k, pv, run_id)})
     assert seen.count("verify") == 3
     assert last["run_state"] == "completed"
 

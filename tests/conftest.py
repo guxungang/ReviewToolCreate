@@ -89,3 +89,29 @@ def understand_output(k: Kernel, pv: str, subfields=("other_ml",)) -> dict:
         "analyzed_block_ids": [b["block_id"] for b in k.docmap(pv)["blocks"]],
         "uncovered_notes": [],
     }}
+
+
+def core_handlers(k: Kernel, pv_id: str, run_id: str) -> dict:
+    """Handlers that do the core jobs properly: claim-evidence assesses every core claim with anchored
+    evidence, and the literature check runs one (offline) search. With these a run can end `completed`."""
+    import json as _json
+    from scholarly_review.core import litops
+
+    def claim_evidence(req):
+        b = block_with(k, pv_id, "GateNet reaches an accuracy")
+        core = [c for c in run_claims(k, run_id) if c["importance"] == "core"]
+        return {"output": {"check_type": "core.claim_evidence",
+                           "evidence": [{"key": "e1", "kind": "manuscript", "content_summary": "abstract claims",
+                                         "source_refs": [{"block_id": b, "quote": "GateNet reaches an accuracy"}],
+                                         "method": "read abstract"}],
+                           "assessments": [{"claim_id": c["claim_id"], "outcome": "supported", "evidence_keys": ["e1"],
+                                            "scope_checked": "stated in the abstract"} for c in core],
+                           "findings": [], "analyzed_block_ids": [b], "not_checked": []}}
+
+    def literature(req):
+        def fetch(url, hosts, max_bytes):
+            return _json.dumps({"results": [], "meta": {"count": 0}}).encode()
+        litops.lit_search(k, run_id, "openalex", "sparse gating text classification", fetch=fetch)
+        return empty_check("core.novelty_positioning")
+
+    return {"core.claim_evidence": claim_evidence, "core.novelty_positioning": literature}

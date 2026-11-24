@@ -218,3 +218,36 @@ def test_claim_evidence_must_cover_every_core_claim_once(kernel, paper):
     asm = [a for a in k.ws.records(run_id, "assessment") if a["check_type"] == "core.claim_evidence"]
     assert sorted(a["claim_id"] for a in asm) == core
     assert any("left this core claim out" in " ".join(a["limitations"]) for a in asm)
+
+
+def test_scope_notes_do_not_make_a_task_partial_but_real_gaps_do(kernel, paper):
+    """Public-paper runs: every task listed some `not_checked` note and ended `partial`, so the report
+    looked incomplete even where the task had done its job."""
+    from tests.conftest import core_handlers, run_claims
+    k = kernel
+    run_id, pv = plan_and_start(k, paper, effort="quick")
+    r = k.claim(run_id)
+    k.submit(r["task"]["task_token"], understand_output(k, pv))
+    h = core_handlers(k, pv, run_id)
+    states = {}
+    while True:
+        r = k.claim(run_id)
+        t = r["task"]
+        if t is None:
+            break
+        if t["task_type"] == "numeric_extract":
+            sub = {"output": {"checks": [], "analyzed_block_ids": [], "not_extractable": ["Fig. 2 only as an image"]}}
+        elif t["check_type"] == "core.claim_evidence":
+            sub = h["core.claim_evidence"](r)
+            sub["output"]["not_checked"] = ["robustness claim beyond SST-B not examined in depth"]
+        elif t["check_type"] == "core.novelty_positioning":
+            # no search was run at all: that is the literature task's own job, so it stays partial
+            sub = {"output": {"check_type": t["check_type"], "evidence": [], "assessments": [], "findings": [],
+                              "analyzed_block_ids": [], "not_checked": ["searches unavailable"]}}
+        else:
+            raise AssertionError(t)
+        res = k.submit(t["task_token"], sub)
+        states[t["check_type"] or t["task_type"]] = (res["execution_status"], res["incomplete_reasons"], res["scope_notes"])
+    assert states["numeric.consistency"][0] == "completed" and states["numeric.consistency"][2]
+    assert states["core.claim_evidence"][0] == "completed"
+    assert states["core.novelty_positioning"] == ("partial", ["no literature search succeeded"], ["searches unavailable"])

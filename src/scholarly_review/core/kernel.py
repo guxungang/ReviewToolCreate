@@ -789,8 +789,11 @@ class Kernel:
             payload = json.loads(task["payload_json"])
             payload["analyzed_block_ids"] = plan.get("analyzed_block_ids", [])
             payload["not_checked"] = plan.get("not_checked", [])
+            payload["blocking_gaps"] = plan.get("blocking_gaps", [])
             c.execute("UPDATE tasks SET payload_json=? WHERE task_id=?", (json.dumps(payload), task["task_id"]))
-            final_state = "partial" if plan.get("not_checked") else "completed"
+            # `not_checked` notes the scope limits every honest check has (figures only as images, no code);
+            # only a gap in the task's own job makes it partial (decided by the kernel, per task type).
+            final_state = "partial" if plan.get("blocking_gaps") else "completed"
             self._task_state(c, task["task_id"], final_state, None)
             entry = bud.entry_for_attempt(c, att["attempt_id"])
             reserved = json.loads(entry["reserved_json"])
@@ -806,7 +809,8 @@ class Kernel:
                 "result_artifact_id": result_aid, "result_sha256": sub_sha,
                 "evidence_ids": [r["evidence_id"] for t, r in plan["records"] if t == "evidence"],
                 "usage": usage, "error": None, "warnings": plan["warnings"],
-                "incomplete_reasons": plan.get("not_checked", []),
+                "incomplete_reasons": plan.get("blocking_gaps", []),
+                "scope_notes": plan.get("not_checked", []),
                 "accepted": plan["counts"],
             }
             c.execute("UPDATE attempts SET state='submitted', ended_at=?, submission_sha256=?, idempotency_key=?, "
@@ -1091,6 +1095,22 @@ class Kernel:
             plan["new_tasks"].append({"type": "verify", "priority": 1, "required": False,
                                       "payload": {"finding_ids": [fid]}})
         plan["not_checked"] = out.not_checked
+        gaps = []
+        if task["check_type"] == "core.claim_evidence":
+            core_ids = {c["claim_id"] for c in self.ws.records(run["run_id"], "claim")
+                        if c["validity"] == "current" and c["importance"] == "core"}
+            given = {a.claim_id for a in out.assessments if a.outcome != "not_checked"}
+            n_left = len(core_ids - given)
+            if n_left:
+                gaps.append(f"{n_left} core claim(s) not assessed")
+        elif task["type"] == "literature":
+            ok = self.ws.q1("SELECT COUNT(*) AS n FROM searches WHERE run_id=? "
+                            "AND json_extract(result_json,'$.provider_status')!='failed'", (run["run_id"],))["n"]
+            if not ok and not any(e.kind == "literature" for e in out.evidence):
+                gaps.append("no literature search succeeded")
+        elif out.not_checked and not (out.assessments or out.findings or out.analyzed_block_ids):
+            gaps.append("the check examined nothing")
+        plan["blocking_gaps"] = gaps
 
     _convert_literature = _convert_check
 
@@ -1258,6 +1278,7 @@ class Kernel:
         unverified = allowed - seen
         if unverified:
             plan["not_checked"] = [f"finding {x} not verified" for x in unverified]
+            plan["blocking_gaps"] = list(plan["not_checked"])
 
     # ---- reproduction plans (never executed in v0.1)
     def _convert_reproduce_plan(self, run, task, cfg, out, producer, errors, plan) -> None:
