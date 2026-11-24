@@ -47,8 +47,12 @@ def _summary(kernel, run_id: str, exp: dict) -> dict:
     items.sort(key=lambda x: IMPACT_ORDER.get(x["impact"], 9))
     strengths = sum(1 for f in snap["findings"] if (f.get("report_eligibility") or [{}])[0].get("category") == "strength")
     cov = snap.get("coverage", {}).get("summary", {}) if isinstance(snap.get("coverage"), dict) else {}
+    ra = snap.get("reviewer_assessment")
+    form = {"recommendation": (ra.get("recommendation") or {}).get("value"),
+            "scores": {s["criterion_id"]: s["value"] for s in ra.get("scores", [])},
+            "note": "draft for you to adopt or edit; export --audience editor for the editor view"} if ra else None
     return {
-        "readiness": exp["readiness"], "partial": exp["partial"],
+        "readiness": exp["readiness"], "partial": exp["partial"], **({"review_form_draft": form} if form else {}),
         "counts": {"reported_issues": len(items), "strengths": strengths, "awaiting_user_confirmation": len(pending)},
         "top_items": items[:8],
         "awaiting_user_confirmation": pending[:6],
@@ -89,6 +93,8 @@ def auto(kernel, *, params: Optional[dict] = None, project_config: Optional[dict
         batches.append(out)
         if not out["workers"]:
             probe = kernel.claim(run_id)  # nothing for workers: lets the kernel finalize, or shows a host task
+            if probe.get("reason") == "final_assessment_added":
+                continue
             if probe.get("task"):
                 kernel.abandon(probe["task"]["task_token"], "auto mode leaves host tasks unclaimed")
                 raise SRError("invalid_state", f"task type {probe['task']['task_type']} is not handled by workers")

@@ -34,6 +34,10 @@ def _params_from_args(a: argparse.Namespace) -> dict:
             _set_path(p, path, v)
     if a.search_providers is not None:
         _set_path(p, "permissions.search_providers", [x for x in a.search_providers.split(",") if x])
+    if a.scores:
+        _set_path(p, "rubric.score_requested", True)
+    if a.recommendation:
+        _set_path(p, "rubric.decision_requested", True)
     if a.no_new_experiments:
         _set_path(p, "scope.allow_new_experiments", False)
     if a.allow_new_experiments:
@@ -67,6 +71,10 @@ def _add_plan_flags(sp: argparse.ArgumentParser) -> None:
     sp.add_argument("--cutoff", help="submission cutoff YYYY-MM-DD")
     sp.add_argument("--venue")
     sp.add_argument("--rubric", help="venue rubric JSON (RubricProfile keys)")
+    sp.add_argument("--scores", action="store_true",
+                    help="reviewer mode: draft the form's scores (needs --rubric with score_scales)")
+    sp.add_argument("--recommendation", action="store_true",
+                    help="reviewer mode: draft a recommendation (needs --rubric with decision_options)")
     sp.add_argument("--host", choices=["codex", "claude"])
     sp.add_argument("--expertise", choices=["general", "generalist", "specialist"])
     sp.add_argument("--search-providers", dest="search_providers", help="comma list, e.g. arxiv,openalex; empty disables")

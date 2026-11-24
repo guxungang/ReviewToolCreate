@@ -202,7 +202,9 @@ def build_snapshot(k: Kernel, run_id: str, audience: Optional[str] = None) -> di
         else:
             limitations.append("interactive mode: model usage and cost of the host session are not measured; "
                                "verification by the same host cannot confirm major issues on its own")
-    if not (summary.get("rubric") or {}).get("score_scales"):
+    if summary.get("reviewer_assessment"):
+        limitations.append("scores and recommendation are a model draft for the reviewer to adopt or edit")
+    elif not (summary.get("rubric") or {}).get("score_scales"):
         limitations.append("venue fit and scores: not assessed (no valid venue rubric supplied)")
     dm = k.docmap(pv_id)
     limitations += [w for w in dm.get("warnings", []) if not w.startswith(NOT_LIMITATIONS)][:3]
@@ -216,6 +218,7 @@ def build_snapshot(k: Kernel, run_id: str, audience: Optional[str] = None) -> di
         "experiment_plans": k.ws.records(run_id, "experiment_plan"),
         "sources": sources, "coverage": cov["coverage"], "coverage_summary": cov["summary"],
         "readiness": {"value": ready, "basis": ready_basis} if cfg["mode"] == "author" else None,
+        "reviewer_assessment": summary.get("reviewer_assessment") if cfg["mode"] == "reviewer" else None,
         "budget": budget, "enforcement": k._enforcement(cfg), "limitations": limitations,
         "is_partial": run["state"] != "completed" or not cov["summary"]["core_coverage_complete"],
     }

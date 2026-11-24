@@ -34,10 +34,10 @@ from .store import Workspace
 PROMPT_VERSION = "prompts-0.1.0"
 LEASE_SECONDS = 1800
 TOKEN_ESTIMATE = {"understand": 20000, "check": 9000, "literature": 12000, "numeric_extract": 8000,
-                  "verify": 7000, "reproduce_plan": 10000}
+                  "verify": 7000, "reproduce_plan": 10000, "assess": 8000}
 # Rough wall time an interactive host model needs per task (measured on a 15-page PDF, 2026-11-23).
 HOST_SECONDS_ESTIMATE = {"understand": 140, "numeric_extract": 70, "check": 90, "literature": 110,
-                         "reproduce_plan": 150, "verify": 30}
+                         "reproduce_plan": 150, "verify": 30, "assess": 60}
 ANALYSIS_WORKER_TYPES = ("understand", "numeric_extract", "check", "reproduce_plan", "literature")
 
 
@@ -49,11 +49,12 @@ def worker_task_types(cfg: dict) -> set[str]:
         types.add("verify")
     if host.get("analysis_worker", "none") != "none":
         types.update(ANALYSIS_WORKER_TYPES)
+        types.add("assess")
     return types
 
 
 POOL_OF = {"understand": "analysis", "check": "analysis", "literature": "analysis", "numeric_extract": "analysis",
-           "reproduce_plan": "analysis", "verify": "verification"}
+           "reproduce_plan": "analysis", "verify": "verification", "assess": "verification"}
 PRIVATE_AUDIENCES = ["author_private", "reviewer_private"]
 MANUSCRIPT_AUDIENCES = ["author_private", "reviewer_private", "authors", "editor"]
 PUBLIC_AUDIENCES = ["author_private", "reviewer_private", "authors", "editor", "public"]
@@ -228,6 +229,11 @@ class Kernel:
         rubric = load_rubric_file(cfg.rubric.source_file) if cfg.rubric.source_file else None
         if cfg.rubric.score_requested and not (rubric and rubric["score_scales"]):
             warnings.append("scores requested but no valid score scale was supplied: scoring stays not_assessed")
+        if cfg.rubric.decision_requested and not (rubric and rubric.get("decision_options")):
+            warnings.append("a recommendation was requested but the form defines no decision_options: "
+                            "no recommendation is drafted")
+        if (cfg.rubric.score_requested or cfg.rubric.decision_requested) and cfg.mode != "reviewer":
+            warnings.append("scores and recommendations are drafted in reviewer mode only")
         if cfg.permissions.code_execution != "denied":
             warnings.append("code execution is not implemented in v0.1: reproduction produces plans only")
         if cfg.effort == "quick" and cfg.scope.domain_profile != "generic-v1":
@@ -535,7 +541,11 @@ class Kernel:
                     return {"task": None, "run_state": "running", "waiting_on_worker": left_for_worker,
                             "next": f"sreview worker run --run {run_id}  (kernel-launched workers; then claim again)"}
             if chosen is None:
+                n_before = c.execute("SELECT COUNT(*) FROM tasks WHERE run_id=?", (run_id,)).fetchone()[0]
                 self._maybe_finalize(c, run_id)
+                if c.execute("SELECT COUNT(*) FROM tasks WHERE run_id=?", (run_id,)).fetchone()[0] > n_before:
+                    return {"task": None, "run_state": "running", "reason": "final_assessment_added",
+                            "next": "claim again: the final reviewer assessment task was added"}
                 waiting = c.execute("SELECT task_id, type FROM tasks WHERE run_id=? AND state='running'", (run_id,)).fetchall()
                 state = c.execute("SELECT state FROM runs WHERE run_id=?", (run_id,)).fetchone()[0]
                 return {"task": None, "run_state": state,
@@ -590,6 +600,19 @@ class Kernel:
         self._set_run_state(c, run_id, "finalizing", "budget")
         self._set_run_state(c, run_id, "partial", "budget")
 
+    @staticmethod
+    def _needs_assessment(c, run) -> bool:
+        """Reviewer mode with a valid venue form and scores or a recommendation requested: one assess
+        task after every check and verification has ended. Never without a form (scales are not invented)."""
+        cfg = json.loads(run["config_json"])
+        rub = cfg["rubric"]
+        if cfg["mode"] != "reviewer" or not (rub.get("score_requested") or rub.get("decision_requested")):
+            return False
+        form = (json.loads(run["summary_json"] or "{}").get("rubric") or {})
+        if not (form.get("score_scales") or (rub.get("decision_requested") and form.get("decision_options"))):
+            return False
+        return not c.execute("SELECT 1 FROM tasks WHERE run_id=? AND type='assess'", (run["run_id"],)).fetchone()
+
     def _maybe_finalize(self, c, run_id: str) -> None:
         run = c.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
         if run["state"] == "pausing":
@@ -601,6 +624,10 @@ class Kernel:
             return
         rows = c.execute("SELECT state, reason FROM tasks WHERE run_id=?", (run_id,)).fetchall()
         if any(r["state"] not in TERMINAL_TASK_STATES for r in rows):
+            return
+        if self._needs_assessment(c, run):
+            self._add_task(c, run_id, "assess", None, priority=1, required=False)
+            self.ws.event(c, run_id, "assessment_task_added", {})
             return
         clean = all(r["state"] == "completed" or (r["state"] == "skipped" and r["reason"] == "not_applicable")
                     for r in rows)
@@ -696,7 +723,31 @@ class Kernel:
             ctx["verification_items"] = items
             ctx["blinding"] = "The candidate conclusion is withheld. Look for counter-evidence and alternative " \
                               "explanations first, including appendices, before deciding."
+        if task["type"] == "assess":
+            ctx |= self._assess_context(run, cfg, summary)
         return ctx
+
+    def _assess_context(self, run, cfg: dict, summary: dict) -> dict:
+        from ..reports.snapshot import build_snapshot, category
+        snap = build_snapshot(self, run["run_id"], "reviewer_private")
+        items = []
+        for f in snap["findings"]:
+            e = (f.get("report_eligibility") or [{}])[0]
+            if not e.get("admitted") or f.get("duplicate_of"):
+                continue
+            items.append({"finding_id": f["finding_id"], "category": category(f),
+                          "impact": f["impact"] if f["impact"] != "not_assessed" else f["potential_impact"],
+                          "verified": bool(f["verification_ids"]), "proposition": f["proposition"],
+                          "claim_ids": f["claim_ids"]})
+        form = summary.get("rubric") or {}
+        cs = snap["coverage_summary"]
+        return {"rubric": {"profile_id": form.get("profile_id"), "venue": cfg["rubric"].get("venue"),
+                           "criteria": form.get("criteria"), "score_scales": form.get("score_scales") or [],
+                           "decision_options": form.get("decision_options") if cfg["rubric"].get("decision_requested") else None,
+                           "scores_requested": bool(cfg["rubric"].get("score_requested"))},
+                "admitted_findings": items,
+                "coverage": {"incomplete": cs["incomplete"], "core_claims": cs["core_claims_extracted"],
+                             "core_claims_checked": cs["core_claims_checked"], "partial_run": snap["is_partial"]}}
 
     def _calc_payload(self, ev: dict) -> Optional[dict]:
         if ev["kind"] != "calculation" or not ev.get("payload_artifact_id"):
@@ -1279,6 +1330,70 @@ class Kernel:
         if unverified:
             plan["not_checked"] = [f"finding {x} not verified" for x in unverified]
             plan["blocking_gaps"] = list(plan["not_checked"])
+
+    # ---- reviewer form draft (reviewer mode, after all checks)
+    def _convert_assess(self, run, task, cfg, out, producer, errors, plan) -> None:
+        from ..reports.snapshot import build_snapshot, category
+        summary = json.loads(run["summary_json"] or "{}")
+        form = summary.get("rubric") or {}
+        scales = {s["criterion_id"]: s for s in form.get("score_scales") or []}
+        snap = build_snapshot(self, run["run_id"], "reviewer_private")
+        admitted = {f["finding_id"]: f for f in snap["findings"]
+                    if (f.get("report_eligibility") or [{}])[0].get("admitted")}
+        seen = set()
+        for s in out.scores:
+            if not cfg["rubric"].get("score_requested"):
+                errors.append("scores were not requested for this run")
+                break
+            sc = scales.get(s.criterion_id)
+            if sc is None:
+                errors.append(f"score: unknown criterion_id {s.criterion_id!r} (form has {sorted(scales)})")
+                continue
+            allowed = [str(v) for v in sc["allowed_values"]]
+            if s.value != "not_assessed" and s.value not in allowed:
+                errors.append(f"score {s.criterion_id}: {s.value!r} is not one of {allowed}")
+            bad = [x for x in s.finding_ids if x not in admitted]
+            if bad:
+                errors.append(f"score {s.criterion_id}: finding_ids not admitted to the report {bad}")
+            seen.add(s.criterion_id)
+        if cfg["rubric"].get("score_requested"):
+            missing = [c for c, sc in scales.items() if sc.get("required") and c not in seen]
+            if missing:
+                errors.append(f"required criteria without a score (use 'not_assessed' with a reason): {missing}")
+        rec = out.recommendation
+        options = [str(o) for o in form.get("decision_options") or []]
+        if rec is not None:
+            if not cfg["rubric"].get("decision_requested") or not options:
+                errors.append("a recommendation was not requested or the form defines no decision_options")
+            elif rec.value not in options:
+                errors.append(f"recommendation {rec.value!r} is not one of {options}")
+            else:
+                bad = [x for x in rec.finding_ids if x not in admitted]
+                if bad:
+                    errors.append(f"recommendation: finding_ids not admitted to the report {bad}")
+                concerns = [f for f in admitted.values() if category(f) == "confirmed_concern"]
+                critical = [f["finding_id"] for f in concerns if f["impact"] == "critical"]
+                serious = [f["finding_id"] for f in concerns if f["impact"] in ("critical", "major")]
+                # options run from most negative to most positive
+                if critical and rec.value == options[-1]:
+                    errors.append(f"recommendation {rec.value!r} is the most positive option although confirmed "
+                                  f"critical concerns stand: {critical}")
+                if not serious and rec.value == options[0] and len(options) > 1:
+                    errors.append(f"recommendation {rec.value!r} is the most negative option but no confirmed major "
+                                  f"or critical concern supports it; cite them or choose another option")
+                if serious and not set(rec.finding_ids) & set(serious) and rec.value != options[-1]:
+                    errors.append(f"the recommendation must cite the confirmed major/critical concerns it rests on: {serious}")
+        elif cfg["rubric"].get("decision_requested") and options:
+            errors.append("a recommendation was requested: give one of the decision_options")
+        summary["reviewer_assessment"] = {
+            "status": "draft for the reviewer to adopt or edit; never submitted automatically",
+            "form": form.get("profile_id"), "venue": cfg["rubric"].get("venue"),
+            "scores": [s.model_dump() for s in out.scores],
+            "recommendation": rec.model_dump() if rec else None,
+            "editor_note": out.editor_note, "not_assessed": out.not_assessed,
+            "based_on_partial_run": bool(snap["is_partial"]), "task_id": task["task_id"],
+        }
+        plan["run_summary"] = summary
 
     # ---- reproduction plans (never executed in v0.1)
     def _convert_reproduce_plan(self, run, task, cfg, out, producer, errors, plan) -> None:

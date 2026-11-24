@@ -88,6 +88,9 @@ ZH_MESSAGES = [
     ("quick runs the focused checks only", "quick 档只做聚焦检查（主张与证据、最接近的相关工作、数值）；"
      "领域专项检查需要 standard 或更高档位"),
     ("venue fit and scores", "期刊适配与评分：未评估（未提供有效的评审表单）"),
+    ("scores and recommendation are a model draft", "评分与建议是模型草稿，需审稿人确认或修改后才能使用"),
+    ("a recommendation was requested but", "要求了录用建议，但评审表单没有定义 decision_options：不生成建议"),
+    ("scores and recommendations are drafted in reviewer mode only", "评分与录用建议只在审稿模式下生成"),
     ("two-column reading order", "双栏阅读顺序、表格和公式来自纯文本抽取，重要数值应对照原 PDF 页面核实"),
     ("scores requested but", "要求了评分，但未提供有效评分量表：评分保持未评估"),
     ("code execution is not implemented", "本版本不执行代码：reproduction 档只生成复现计划"),
@@ -274,6 +277,7 @@ def render_markdown(snap: dict) -> str:
         refs = _references(snap, adm, cfg["outputs"]["max_external_references"])
         if refs:
             lines += [f"## {t['refs']}", ""] + refs + [""]
+        lines += _assessment_block(snap, cfg["outputs"]["language"])
     if internal:
         lang = cfg["outputs"]["language"]
         lines += [f"## {t['coverage']}", ""] + [
@@ -282,6 +286,38 @@ def render_markdown(snap: dict) -> str:
             + ([t["none"]] if not snap["coverage_summary"]["incomplete"] else []) + [""]
     lines += ["---", t["disclaimer"]]
     return "\n".join(lines) + "\n"
+
+
+def _assessment_block(snap: dict, lang: str) -> list[str]:
+    """Scores, recommendation and editor note: reviewer-private and editor views only, never the authors'."""
+    a = snap.get("reviewer_assessment")
+    aud = snap["audience"]
+    if not a or aud not in ("reviewer_private", "editor"):
+        return []
+    zh = lang == "zh-CN"
+    short = lambda ids: ", ".join(f"`{i[-8:]}`" for i in ids) if aud == "reviewer_private" else ""
+    out = ["## " + ("评审表单草稿（需你确认，不会自动提交）" if zh else "Review form draft (for you to adopt or edit; never submitted)"), ""]
+    if a.get("based_on_partial_run"):
+        out += ["> " + ("本次运行不完整，评分只基于已完成的检查。" if zh else
+                        "This run was partial: the draft rests only on the checks that finished."), ""]
+    if a.get("scores"):
+        out += ["| " + ("标准" if zh else "Criterion") + " | " + ("分值" if zh else "Value") + " | "
+                + ("理由" if zh else "Rationale") + " |", "|---|---|---|"]
+        for s in a["scores"]:
+            refs = short(s.get("finding_ids") or [])
+            out.append(f"| {s['criterion_id']} | {s['value']} | {s['rationale'].replace('|', '/')}"
+                       + (f" ({refs})" if refs else "") + " |")
+        out.append("")
+    rec = a.get("recommendation")
+    if rec:
+        refs = short(rec.get("finding_ids") or [])
+        out += [f"- **{'建议' if zh else 'Recommendation'}: {rec['value']}** — {rec['rationale']}"
+                + (f" ({refs})" if refs else ""), ""]
+    if a.get("editor_note"):
+        out += [f"### {'给编辑的保密意见' if zh else 'Confidential note to the editor'}", "", a["editor_note"], ""]
+    if a.get("not_assessed") and aud == "reviewer_private":
+        out += [f"- {'未评估' if zh else 'Not assessed'}: " + ("；" if zh else "; ").join(a["not_assessed"]), ""]
+    return out
 
 
 def _question_block(snap: dict, f: dict, t: dict, aud: str) -> list[str]:

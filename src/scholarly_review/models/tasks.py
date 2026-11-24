@@ -14,7 +14,8 @@ from .common import (
     Importance, Strict, VerificationResult,
 )
 
-TaskType = Literal["understand", "check", "numeric_extract", "literature", "verify", "reproduce_plan", "report"]
+TaskType = Literal["understand", "check", "numeric_extract", "literature", "verify", "reproduce_plan", "assess",
+                   "report"]
 
 
 class InputArtifactRef(Strict):
@@ -254,6 +255,27 @@ class ReproducePlanOutput(Strict):
     static_notes: list[str] = Field(default_factory=list)
 
 
+class CriterionScore(Strict):
+    criterion_id: str
+    value: str  # one of the rubric's allowed_values, or "not_assessed"
+    rationale: str = Field(min_length=1)
+    finding_ids: list[str] = Field(default_factory=list)
+
+
+class Recommendation(Strict):
+    value: str  # one of the rubric's decision_options
+    rationale: str = Field(min_length=1)
+    finding_ids: list[str] = Field(default_factory=list)
+
+
+class AssessOutput(Strict):
+    """Reviewer mode only: a draft of the venue form for the human reviewer to adopt or edit."""
+    scores: list[CriterionScore] = Field(default_factory=list)
+    recommendation: Optional[Recommendation] = None
+    editor_note: Optional[str] = None
+    not_assessed: list[str] = Field(default_factory=list)
+
+
 OUTPUT_MODELS = {
     "understand": UnderstandOutput,
     "check": CheckOutput,
@@ -261,6 +283,7 @@ OUTPUT_MODELS = {
     "numeric_extract": NumericExtractOutput,
     "verify": VerifyOutput,
     "reproduce_plan": ReproducePlanOutput,
+    "assess": AssessOutput,
 }
 
 

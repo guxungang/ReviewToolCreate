@@ -61,6 +61,10 @@ def load_rubric_file(path: str) -> dict:
         for k in ("criterion_id", "allowed_values", "value_definitions", "required"):
             if k not in s:
                 raise SRError("schema_invalid", f"score scale misses '{k}'")
+    opts = data.get("decision_options")
+    if opts is not None and (not isinstance(opts, list) or len(opts) < 2 or not all(isinstance(o, str) for o in opts)):
+        raise SRError("schema_invalid", "decision_options must be a list of at least two strings, "
+                                        "ordered from most negative to most positive")
     return data
 
 
