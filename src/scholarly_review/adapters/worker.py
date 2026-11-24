@@ -54,8 +54,10 @@ QUERY_SCHEMA = {
 QUERY_HEADER = """You plan literature searches for a scholarly paper check. Propose up to 4 search queries
 that find the closest prior work for the claims in the task context. Queries must contain only PUBLIC
 TECHNICAL CONCEPTS (method families, tasks, datasets): never the paper's title, distinctive phrases or
-sentences from the manuscript. You have no tools; the kernel runs the searches. Return the queries
-through the structured output tool."""
+sentences from the manuscript. You have no tools; the kernel runs the searches. Spread the queries over
+the allowed providers (OpenAlex covers venues and citation-indexed work, arXiv covers preprints); the
+kernel re-runs a failed query on another allowed provider. Return the queries through the structured
+output tool."""
 
 
 def find_claude() -> Optional[str]:
@@ -150,31 +152,85 @@ def _subprocess_runner(cmd: list[str], cwd: Path, timeout: int, stdin_text: str)
     return (p.stdout or "").splitlines()
 
 
-def _search_all(kernel, run_id: str, queries: list, fetch) -> tuple[list, list]:
-    """Run the proposed searches through the kernel (disclosure checks, budget, provenance)."""
+ARXIV_SPACING_S = 3.0  # arXiv API terms: one request every 3 s; bursts are what got rate-limited
+
+
+def _search_all(kernel, run_id: str, queries: list, fetch, permitted: Optional[list] = None,
+                sleep=time.sleep) -> tuple[list, list]:
+    """Run the proposed searches through the kernel (disclosure checks, budget, provenance).
+
+    Resilience, all within the run's permitted providers (never a provider the user did not allow):
+    - one wait-and-retry when the provider names a short Retry-After;
+    - a failed query is re-run once on another permitted provider;
+    - after two failures a provider is skipped for the remaining queries (circuit breaker);
+    - successive arXiv calls are spaced by ARXIV_SPACING_S.
+    """
     import re as _re
     from ..core import litops
     from ..modules import literature
+    permitted = [p for p in (permitted or []) if p in literature.PROVIDERS]
     results, notes = [], []
-    for q in queries[:4]:
+    failures: dict[str, int] = {}
+    last_arxiv = [0.0]
+    real_net = fetch is None
+
+    def one(provider: str, query: str) -> Optional[dict]:
         for attempt in (1, 2):
+            if provider == "arxiv" and real_net:
+                gap = ARXIV_SPACING_S - (time.monotonic() - last_arxiv[0])
+                if gap > 0:
+                    sleep(gap)
+                last_arxiv[0] = time.monotonic()
             try:
-                r = litops.lit_search(kernel, run_id, q["provider"], q["query"], 8,
-                                      fetch=fetch or literature.http_get)
+                r = litops.lit_search(kernel, run_id, provider, query, 8, fetch=fetch or literature.http_get)
             except SRError as e:
-                notes.append(f"{q['provider']} '{q['query']}': {e.message}")
-                break
+                notes.append(f"{provider} '{query}': {e.message}")
+                return None
             wait_s = _re.search(r"retry after (\d+) s", r.get("error_reason") or "")
             if r.get("provider_status") == "failed" and wait_s and int(wait_s.group(1)) <= 60 and attempt == 1:
-                time.sleep(int(wait_s.group(1)))
+                sleep(int(wait_s.group(1)))
                 continue
-            results.append({"provider": q["provider"], "query": q["query"], "status": r.get("provider_status"),
-                            "error": r.get("error_reason"), "records": [
-                                {k: rec.get(k) for k in ("source_id", "title", "year", "published", "access_level")}
-                                | {"authors": (rec.get("authors") or [])[:3],
-                                   "abstract": (rec.get("abstract") or "")[:700]}
-                                for rec in r.get("records", [])]})
-            break
+            return r
+        return r
+
+    def record(provider, query, r, fallback_for=None):
+        entry = {"provider": provider, "query": query, "status": r.get("provider_status"),
+                 "error": r.get("error_reason"), "records": [
+                     {k: rec.get(k) for k in ("source_id", "title", "year", "published", "access_level")}
+                     | {"authors": (rec.get("authors") or [])[:3], "abstract": (rec.get("abstract") or "")[:700]}
+                     for rec in r.get("records", [])]}
+        if fallback_for:
+            entry["fallback_for"] = fallback_for
+        results.append(entry)
+
+    for q in queries[:4]:
+        provider, query = q.get("provider"), q.get("query")
+        if permitted and provider not in permitted:
+            notes.append(f"{provider} is not permitted for this run; query routed to {permitted[0]}")
+            provider = permitted[0]
+        if failures.get(provider, 0) >= 2:
+            alt = [p for p in permitted if p != provider and failures.get(p, 0) < 2]
+            if not alt:
+                notes.append(f"'{query}' skipped: every permitted provider failed twice")
+                continue
+            notes.append(f"{provider} skipped after repeated failures; '{query}' sent to {alt[0]}")
+            provider = alt[0]
+        r = one(provider, query)
+        if r is None:
+            continue
+        if r.get("provider_status") != "failed":
+            record(provider, query, r)
+            continue
+        failures[provider] = failures.get(provider, 0) + 1
+        record(provider, query, r)
+        alt = [p for p in permitted if p != provider and failures.get(p, 0) < 2]
+        if alt:
+            r2 = one(alt[0], query)
+            if r2 is not None:
+                if r2.get("provider_status") == "failed":
+                    failures[alt[0]] = failures.get(alt[0], 0) + 1
+                record(alt[0], query, r2, fallback_for=provider)
+                notes.append(f"{provider} failed for '{query}'; re-ran on {alt[0]} ({r2.get('provider_status')})")
     return results, notes
 
 
@@ -232,7 +288,8 @@ def _run_literature(kernel, run_id, req, files, stage, binary, runner, timeout, 
         return _finish(kernel, req, stage, e, t0, errors_by_task)
     plan = inspect_stream(lines_a, stage)
     queries = (plan.get("structured_output") or {}).get("queries") or []
-    results, notes = _search_all(kernel, run_id, queries, search_fetch)
+    ctx = json.loads(Path(files["context"]).read_text("utf-8"))
+    results, notes = _search_all(kernel, run_id, queries, search_fetch, ctx.get("search_providers") or [])
     searches = {"searches": results, "search_problems": notes,
                 "note": "Only these sources exist for this run; cite them by source_id as literature evidence. "
                         "If searches failed or found nothing relevant, say so in not_checked."}

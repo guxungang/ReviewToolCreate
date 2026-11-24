@@ -21,6 +21,7 @@ from . import ingest
 
 USER_AGENT = "scholarly-review/0.1 (research tool)"
 TIMEOUT = 20
+HOST_TIMEOUT = {"export.arxiv.org": 35}  # the arXiv API is often slow rather than down
 PROVIDERS = {
     "openalex": {"hosts": {"api.openalex.org"}},
     "arxiv": {"hosts": {"export.arxiv.org", "arxiv.org"}},
@@ -45,7 +46,7 @@ def http_get(url: str, hosts: set[str], max_bytes: int) -> bytes:
     opener = urllib.request.build_opener(_AllowlistRedirect(hosts))
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with opener.open(req, timeout=TIMEOUT) as resp:
+        with opener.open(req, timeout=HOST_TIMEOUT.get(host, TIMEOUT)) as resp:
             data = resp.read(max_bytes + 1)
     except SRError:
         raise

@@ -210,7 +210,9 @@ def test_analysis_workers_run_every_task_including_literature(kernel, paper):
     assert runner.state["peak"] == 2  # standard: max_concurrency 2
     planning = next(c["prompt"] for c in runner.calls if c["prompt"].startswith("You plan literature searches"))
     assert "=== MANUSCRIPT" not in planning  # query planning never sees manuscript text
-    assert k.ws.q1("SELECT COUNT(*) AS n FROM searches WHERE run_id=?", (run_id,))["n"] == 1
+    # the one planned query fails without network and is re-run once on the other permitted provider
+    assert k.ws.q1("SELECT COUNT(*) AS n FROM searches WHERE run_id=?", (run_id,))["n"] == 2
+    assert any("re-ran on" in n for n in lit["search_problems"])
     assert k.claim(run_id)["task"] is None and k.status(run_id)["state"] in ("completed", "partial")
 
 
@@ -257,3 +259,31 @@ def test_rejected_worker_result_is_retried_with_the_errors(kernel, paper):
     assert [w["status"] for w in out["workers"]] == ["schema_invalid", "submitted"]
     assert "previous attempt for this task was rejected" in runner.calls[1]["prompt"]
     assert "previous attempt" not in runner.calls[0]["prompt"]
+
+
+def test_failed_searches_fall_back_to_another_permitted_provider(kernel, paper):
+    """2026-11-24 public-paper run: four arXiv queries all timed out or were rate limited, OpenAlex never tried."""
+    import json as _json
+    from scholarly_review.adapters import worker
+    from scholarly_review.core.errors import SRError as _E
+    k = kernel
+    run_id, pv = plan_and_start(k, paper, effort="quick")
+    calls = []
+
+    def fetch(url, hosts, max_bytes):
+        calls.append(url.split("/")[2])
+        if "arxiv" in url:
+            raise _E("provider_timeout", "network failure contacting export.arxiv.org: timed out", retryable=True)
+        return _json.dumps({"results": [{"id": "https://openalex.org/W1", "title": "Prior work",
+                                         "publication_date": "2015-01-01"}], "meta": {"count": 1}}).encode()
+
+    qs = [{"provider": "arxiv", "query": q} for q in
+          ("sparse gating text classification", "mixture of experts routing", "conditional computation", "gated layers")]
+    results, notes = worker._search_all(k, run_id, qs, fetch, ["arxiv", "openalex"], sleep=lambda s: None)
+    ok = [r for r in results if r["status"] != "failed"]
+    assert len(ok) == 4 and all(r["provider"] == "openalex" for r in ok)
+    assert calls.count("export.arxiv.org") == 2  # circuit breaker: arXiv is skipped after two failures
+    assert any("skipped after repeated failures" in n for n in notes)
+    # a provider the run does not permit is never used, even as a fallback
+    results, notes = worker._search_all(k, run_id, qs[:1], fetch, ["arxiv"], sleep=lambda s: None)
+    assert [r["provider"] for r in results] == ["arxiv"] and results[0]["status"] == "failed"
