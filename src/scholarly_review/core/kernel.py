@@ -38,6 +38,7 @@ TOKEN_ESTIMATE = {"understand": 20000, "check": 9000, "literature": 12000, "nume
 # Rough wall time an interactive host model needs per task (measured on a 15-page PDF, 2026-11-23).
 HOST_SECONDS_ESTIMATE = {"understand": 140, "numeric_extract": 70, "check": 90, "literature": 110,
                          "reproduce_plan": 150, "verify": 30, "assess": 60}
+VERIFY_BATCH = 6  # findings per verification task
 ANALYSIS_WORKER_TYPES = ("understand", "numeric_extract", "check", "reproduce_plan", "literature")
 
 
@@ -992,6 +993,14 @@ class Kernel:
             plan["analyzed_block_ids"] = [b for b in output.analyzed_block_ids if b in block_ids]
         handler = getattr(self, f"_convert_{task['type']}")
         handler(run, task, cfg, output, producer, errors, plan)
+        # one verification task per batch of findings, not per finding: each task carries the whole
+        # manuscript, so per-finding tasks made verification most of a standard run's cost (2026-11-24)
+        single = [t for t in plan["new_tasks"] if t["type"] == "verify"]
+        if len(single) > 1:
+            fids = [f for t in single for f in t["payload"]["finding_ids"]]
+            plan["new_tasks"] = [t for t in plan["new_tasks"] if t["type"] != "verify"] + [
+                {"type": "verify", "priority": 1, "required": False,
+                 "payload": {"finding_ids": fids[i:i + VERIFY_BATCH]}} for i in range(0, len(fids), VERIFY_BATCH)]
         if errors:
             raise SemanticErrors(errors)
         plan["counts"] = {}

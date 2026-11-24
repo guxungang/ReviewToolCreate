@@ -63,25 +63,28 @@ def test_full_author_flow(kernel, paper):
 
     def verify_h(req):
         ctx = json.loads(Path(req["files"]["context"]).read_text())
-        item = ctx["verification_items"][0]
-        assert "proposition" not in item  # blinded: candidate conclusion withheld
-        if item["has_calculation_evidence"]:
-            return {"output": {"context_independence": "same_context", "blinded": True, "verifications": [{
-                "finding_id": item["finding_id"], "method": "re-read Table 1, recomputed", "result": "validated",
-                "rationale": "macro-F1 is 76.19% from the matrix", "confirmed_impact": "major",
-                "inputs_rechecked": True}]}}
-        if "appendix" in (item["neutral_question"] or "").lower():  # A10: refuted by appendix ablation
-            b = block_with(k, pv, "Ablation with identical training data")
-            return {"output": {"context_independence": "same_context", "blinded": True,
-                               "evidence": [{"key": "v1", "kind": "manuscript", "content_summary": "appendix ablation",
-                                             "source_refs": [{"block_id": b, "quote": "Ablation with identical training data"}],
-                                             "method": "read appendix"}],
-                               "verifications": [{"finding_id": item["finding_id"], "method": "searched appendix",
-                                                  "result": "invalidated", "rationale": "Table 5 isolates the gate",
-                                                  "counterevidence_keys": ["v1"]}]}}
-        return {"output": {"context_independence": "fresh", "blinded": True, "verifications": [{
-            "finding_id": item["finding_id"], "method": "re-read Sec. 2/3", "result": "validated",
-            "rationale": "data doubled for GateNet only in the main table", "confirmed_impact": "major"}]}}
+        out = {"context_independence": "same_context", "blinded": True, "evidence": [], "verifications": []}
+        for item in ctx["verification_items"]:  # one task verifies a batch of findings
+            assert "proposition" not in item  # blinded: candidate conclusion withheld
+            if item["has_calculation_evidence"]:
+                out["verifications"].append({
+                    "finding_id": item["finding_id"], "method": "re-read Table 1, recomputed", "result": "validated",
+                    "rationale": "macro-F1 is 76.19% from the matrix", "confirmed_impact": "major",
+                    "inputs_rechecked": True})
+            elif "appendix" in (item["neutral_question"] or "").lower():  # A10: refuted by appendix ablation
+                b = block_with(k, pv, "Ablation with identical training data")
+                out["evidence"].append({"key": "v1", "kind": "manuscript", "content_summary": "appendix ablation",
+                                        "source_refs": [{"block_id": b, "quote": "Ablation with identical training data"}],
+                                        "method": "read appendix"})
+                out["verifications"].append({"finding_id": item["finding_id"], "method": "searched appendix",
+                                             "result": "invalidated", "rationale": "Table 5 isolates the gate",
+                                             "counterevidence_keys": ["v1"]})
+            else:
+                out["context_independence"] = "fresh"  # declared by the host; the kernel records inherited
+                out["verifications"].append({
+                    "finding_id": item["finding_id"], "method": "re-read Sec. 2/3", "result": "validated",
+                    "rationale": "data doubled for GateNet only in the main table", "confirmed_impact": "major"})
+        return {"output": out}
 
     def ablation_h(req):
         b = block_with(k, pv, "twice the training data")
@@ -107,7 +110,7 @@ def test_full_author_flow(kernel, paper):
 
     seen, last = run_to_end(k, run_id, pv, {"numeric.consistency": numeric_h, "verify": verify_h,
                                             "ml.ablation_attribution": ablation_h, **core_handlers(k, pv, run_id)})
-    assert seen.count("verify") == 3
+    assert seen.count("verify") == 2  # the two ablation findings share one verification task
     assert last["run_state"] == "completed"
 
     findings = {f["proposition"][:30]: f for f in k.ws.records(run_id, "finding")}

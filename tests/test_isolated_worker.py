@@ -45,7 +45,7 @@ def _prepare(k, paper, verify_worker="claude"):
 
 
 def _ctx_from_prompt(prompt):
-    body = prompt.split("=== TASK CONTEXT (JSON) ===\n", 1)[1].split("\n\n=== MANUSCRIPT", 1)[0]
+    body = prompt.split("=== TASK CONTEXT (JSON) ===\n", 1)[1].split("\n\n=== LITERATURE SEARCHES", 1)[0]
     return json.loads(body)
 
 
@@ -105,7 +105,9 @@ def test_isolated_worker_can_confirm_major(kernel, paper):
     assert out["workers"] and all(w["status"] == "submitted" for w in out["workers"])
     call = runner.calls[0]
     assert call["files"] == []  # nothing on disk: the bundle travels inline on stdin
-    assert "=== MANUSCRIPT (annotated blocks) ===" in call["prompt"] and "blinded verification" in call["prompt"]
+    system = call["cmd"][call["cmd"].index("--append-system-prompt") + 1]
+    assert "=== MANUSCRIPT (annotated blocks) ===" in system and "=== MANUSCRIPT" not in call["prompt"]
+    assert "blinded verification" in call["prompt"]
     assert "--tools" in call["cmd"] and call["cmd"][call["cmd"].index("--tools") + 1] == ""
     assert "--strict-mcp-config" in call["cmd"] and "--no-session-persistence" in call["cmd"]
     assert not Path(call["cwd"]).exists()
@@ -341,3 +343,35 @@ def test_codex_verify_is_fresh_only_without_tool_use(kernel, paper):
     assert out["workers"][0]["isolated"] is False and "command_execution" in out["workers"][0]["problems"][0]
     v = k.ws.records(run2, "verification")[0]
     assert v["context_independence"] == "inherited"  # a shell call could have read anything
+
+
+def test_cost_shape_shared_prefix_warmup_and_batched_verification(kernel, paper):
+    """2026-11-24 standard runs cost $7-8 per paper: 25 one-finding verification calls, each re-sending the
+    whole manuscript at cache-write price. Now: manuscript-first prompts (shared cacheable prefix), the first
+    call of each task type runs alone, and findings are verified in batches."""
+    import threading
+    from scholarly_review.core.kernel import VERIFY_BATCH
+    k = kernel
+    order, lock = [], threading.Lock()
+    inner = _analysis_result_lazy(k)
+
+    def result_for(ctx, prompt):
+        with lock:
+            order.append(("start", ctx["task_type"]))
+        out = inner(ctx, prompt)
+        with lock:
+            order.append(("end", ctx["task_type"]))
+        return out
+    runner = fake_runner(result_for, delay=0.02)
+    run_id, pv = plan_and_start(k, paper, host={"name": "claude", "analysis_worker": "claude", "verify_worker": "claude"})
+    worker.run_workers(k, run_id, runner=runner, binary="claude", max_tasks=50, search_fetch=_no_network)
+    checks = [c for c in runner.calls if "=== TASK CONTEXT" in c["prompt"]
+              and _ctx_from_prompt(c["prompt"])["task_type"] == "check"]
+    systems = {c["cmd"][c["cmd"].index("--append-system-prompt") + 1] for c in checks}
+    assert len(checks) > 2 and len(systems) == 1  # one identical, cacheable system prompt (manuscript)
+    assert "=== MANUSCRIPT" in next(iter(systems)) and all("=== MANUSCRIPT" not in c["prompt"] for c in checks)
+    first_end = order.index(("end", "check"))
+    assert [e for e in order[:first_end] if e[1] == "check"] == [("start", "check")]  # warm-up call ran alone
+    sizes = [len(json.loads(t["payload_json"])["finding_ids"])
+             for t in k.ws.q("SELECT payload_json FROM tasks WHERE run_id=? AND type='verify'", (run_id,))]
+    assert all(n <= VERIFY_BATCH for n in sizes)

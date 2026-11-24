@@ -92,12 +92,16 @@ def _codex_command(binary: str, model: Optional[str], stage: Path) -> list[str]:
     return cmd + ["-"]  # prompt on stdin
 
 
-def engine_command(engine: str, binary: str, schema: str, model: Optional[str], stage: Path) -> list[str]:
-    return _codex_command(binary, model, stage) if engine == "codex" else _command(binary, schema, model)
-
-
-def engine_prompt(engine: str, prompt: str, schema: str) -> str:
-    return prompt + "\n\n" + CODEX_NOTE + "\n" + schema if engine == "codex" else prompt
+def engine_call(engine: str, binary: str, schema: str, model: Optional[str], stage: Path,
+                prompt: str, system: Optional[str] = None) -> tuple[list[str], str]:
+    """(command, stdin) for one worker call. Claude: the shared part goes in the cached system prompt.
+    Codex: one stdin text with the shared part first (OpenAI caches identical prompt prefixes)."""
+    if engine == "codex":
+        text = (system + "\n\n" if system else "") + prompt + "\n\n" + CODEX_NOTE + "\n" + schema
+        return _codex_command(binary, model, stage), text
+    if system and len(system) > MAX_SYSTEM_CHARS:
+        return _command(binary, schema, model), system + "\n\n" + prompt
+    return _command(binary, schema, model, system), prompt
 
 
 def _json_from_text(text: str) -> Optional[dict]:
@@ -182,8 +186,20 @@ def find_claude() -> Optional[str]:
     return env if env and os.access(env, os.X_OK) else None
 
 
+MAX_SYSTEM_CHARS = 400_000  # keep the command line well under ARG_MAX; longer bundles go on stdin
+
+
+def build_system(files: dict) -> str:
+    """Fixed header + manuscript: identical for every task of a run. Passed as the system prompt, which
+    `claude -p` caches, so after the first call of a task type the manuscript is read from the prompt
+    cache at about a tenth of the price (measured 2026-11-24: 13.1k tokens written once, then read)."""
+    return "\n\n".join([HEADER, "=== MANUSCRIPT (annotated blocks) ===\n" +
+                         Path(files["document"]).read_text("utf-8"), "=== END OF MANUSCRIPT ==="])
+
+
 def build_prompt(req: dict, files: dict, previous_errors: Optional[list] = None) -> str:
-    parts = [HEADER]
+    """The task-specific part (instructions, context, retry errors); the manuscript is in build_system."""
+    parts = []
     if req["task_type"] == "verify":
         parts.append(VERIFY_NOTE)
     if previous_errors:
@@ -191,14 +207,15 @@ def build_prompt(req: dict, files: dict, previous_errors: Optional[list] = None)
                      "problems:\n" + json.dumps(previous_errors, ensure_ascii=False, indent=1)[:6000])
     parts.append("=== TASK INSTRUCTIONS ===\n" + Path(files["instructions"]).read_text("utf-8"))
     parts.append("=== TASK CONTEXT (JSON) ===\n" + Path(files["context"]).read_text("utf-8"))
-    parts.append("=== MANUSCRIPT (annotated blocks) ===\n" + Path(files["document"]).read_text("utf-8"))
     return "\n\n".join(parts)
 
 
-def _command(binary: str, schema: str, model: Optional[str]) -> list[str]:
+def _command(binary: str, schema: str, model: Optional[str], system: Optional[str] = None) -> list[str]:
     cmd = [binary, "-p", "--output-format", "stream-json", "--verbose", "--tools", "",
            "--strict-mcp-config", "--setting-sources", "local", "--no-session-persistence",
            "--json-schema", schema]
+    if system:
+        cmd += ["--append-system-prompt", system]
     if model:
         cmd += ["--model", model]
     return cmd
@@ -398,8 +415,8 @@ def _run_literature(kernel, run_id, req, files, stage, binary, runner, timeout, 
                              "=== TASK INSTRUCTIONS ===\n" + Path(files["instructions"]).read_text("utf-8"),
                              "=== TASK CONTEXT (JSON) ===\n" + Path(files["context"]).read_text("utf-8")])
     try:
-        lines_a = runner(engine_command(engine, binary or engine, json.dumps(QUERY_SCHEMA), model, stage), stage,
-                         timeout, engine_prompt(engine, prompt_a, json.dumps(QUERY_SCHEMA)))
+        cmd_a, in_a = engine_call(engine, binary or engine, json.dumps(QUERY_SCHEMA), model, stage, prompt_a)
+        lines_a = runner(cmd_a, stage, timeout, in_a)
     except SRError as e:
         return _finish(kernel, req, stage, e, t0, errors_by_task)
     plan = engine_inspect(engine, lines_a, stage)
@@ -414,8 +431,8 @@ def _run_literature(kernel, run_id, req, files, stage, binary, runner, timeout, 
         "\n\n=== LITERATURE SEARCHES (run by the kernel) ===\n" + json.dumps(searches, ensure_ascii=False)
     schema = json.dumps(json.loads(Path(files["output_schema"]).read_text("utf-8")))
     try:
-        lines_b = runner(engine_command(engine, binary or engine, schema, model, stage), stage, timeout,
-                         engine_prompt(engine, prompt_b, schema))
+        cmd_b, in_b = engine_call(engine, binary or engine, schema, model, stage, prompt_b, build_system(files))
+        lines_b = runner(cmd_b, stage, timeout, in_b)
     except SRError as e:
         lines_b = e
     prior = {k: plan.get(k) for k in ("input_tokens", "output_tokens", "cost_usd")}
@@ -454,6 +471,7 @@ def run_workers(kernel, run_id: str, *, max_tasks: int = 20, timeout: int = 900,
     done: list[dict] = []
     errors_by_task: dict[str, list] = {}
     inflight: dict[Future, tuple[dict, Path, float, str]] = {}
+    warm: set[tuple[str, str]] = set()  # (engine, task type) whose prompt prefix is already cached
     started = 0
     stop_reason = "no worker task ready"
     with ThreadPoolExecutor(max_workers=parallel) as pool:
@@ -479,9 +497,21 @@ def run_workers(kernel, run_id: str, *, max_tasks: int = 20, timeout: int = 900,
                         shutil.rmtree(stage, ignore_errors=True)
                     started += 1
                     continue
+                kind = (engine, req["task_type"])
+                while kind not in warm and any((e, r["task_type"]) == kind for r, _, _, e in inflight.values()):
+                    # let the first call of this kind write the cache before the others start
+                    finished, _ = wait(list(inflight), return_when=FIRST_COMPLETED)
+                    for fut in finished:
+                        r_, st_, t0_, e_ = inflight.pop(fut)
+                        warm.add((e_, r_["task_type"]))
+                        try:
+                            done.append(_finish(kernel, r_, st_, fut.result(), t0_, errors_by_task, engine=e_))
+                        finally:
+                            shutil.rmtree(st_, ignore_errors=True)
                 schema = json.dumps(json.loads(Path(files["output_schema"]).read_text("utf-8")))
-                prompt = engine_prompt(engine, build_prompt(req, files, errors_by_task.get(req["task_id"])), schema)
-                cmd = engine_command(engine, bin_, schema, model, stage)
+                cmd, prompt = engine_call(engine, bin_, schema, model, stage,
+                                          build_prompt(req, files, errors_by_task.get(req["task_id"])),
+                                          build_system(files))
 
                 def call(cmd=cmd, stage=stage, prompt=prompt):
                     try:
@@ -497,6 +527,7 @@ def run_workers(kernel, run_id: str, *, max_tasks: int = 20, timeout: int = 900,
             finished, _ = wait(list(inflight), return_when=FIRST_COMPLETED)
             for fut in finished:
                 req, stage, t0, engine = inflight.pop(fut)
+                warm.add((engine, req["task_type"]))
                 try:
                     done.append(_finish(kernel, req, stage, fut.result(), t0, errors_by_task, engine=engine))
                 finally:
