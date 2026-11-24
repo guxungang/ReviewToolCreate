@@ -1,0 +1,290 @@
+{
+  "$defs": {
+    "PaperSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "research_problem": {
+          "title": "Research Problem",
+          "type": "string"
+        },
+        "task": {
+          "title": "Task",
+          "type": "string"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "contributions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Contributions",
+          "type": "array"
+        },
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "data": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data",
+          "type": "array"
+        },
+        "main_results": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Main Results",
+          "type": "array"
+        },
+        "paper_type": {
+          "enum": [
+            "empirical",
+            "systems",
+            "theory",
+            "mixed",
+            "survey",
+            "position"
+          ],
+          "title": "Paper Type",
+          "type": "string"
+        },
+        "detected_domain": {
+          "enum": [
+            "ml",
+            "systems",
+            "security",
+            "other"
+          ],
+          "title": "Detected Domain",
+          "type": "string"
+        },
+        "ai_subfields": {
+          "items": {
+            "enum": [
+              "llm_nlp",
+              "vision_multimodal",
+              "rl",
+              "ml_theory",
+              "agents",
+              "graph",
+              "other_ml"
+            ],
+            "type": "string"
+          },
+          "title": "Ai Subfields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "research_problem",
+        "task",
+        "method",
+        "contributions",
+        "assumptions",
+        "data",
+        "main_results",
+        "paper_type",
+        "detected_domain"
+      ],
+      "title": "PaperSummary",
+      "type": "object"
+    },
+    "QuoteRef": {
+      "additionalProperties": false,
+      "description": "A verbatim quote from one DocumentMap block; the kernel resolves match_status.",
+      "properties": {
+        "block_id": {
+          "title": "Block Id",
+          "type": "string"
+        },
+        "quote": {
+          "minLength": 3,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "quote"
+      ],
+      "title": "QuoteRef",
+      "type": "object"
+    },
+    "SubmitClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "original_text": {
+          "minLength": 1,
+          "title": "Original Text",
+          "type": "string"
+        },
+        "normalized_text": {
+          "minLength": 1,
+          "title": "Normalized Text",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "explicit",
+            "paraphrase"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "importance": {
+          "enum": [
+            "core",
+            "supporting",
+            "peripheral"
+          ],
+          "title": "Importance",
+          "type": "string"
+        },
+        "claim_types": {
+          "items": {
+            "enum": [
+              "empirical",
+              "theoretical",
+              "comparative",
+              "efficiency",
+              "generality",
+              "reproducibility"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Claim Types",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/QuoteRef"
+          },
+          "minItems": 1,
+          "title": "Source Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "original_text",
+        "normalized_text",
+        "scope",
+        "origin",
+        "importance",
+        "claim_types",
+        "source_refs"
+      ],
+      "title": "SubmitClaim",
+      "type": "object"
+    },
+    "SubmitHypothesis": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "motivation": {
+          "title": "Motivation",
+          "type": "string"
+        },
+        "related_claims": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Related Claims",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/QuoteRef"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "question",
+        "motivation",
+        "related_claims"
+      ],
+      "title": "SubmitHypothesis",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "$ref": "#/$defs/PaperSummary"
+    },
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/SubmitClaim"
+      },
+      "title": "Claims",
+      "type": "array"
+    },
+    "hypotheses": {
+      "items": {
+        "$ref": "#/$defs/SubmitHypothesis"
+      },
+      "title": "Hypotheses",
+      "type": "array"
+    },
+    "analyzed_block_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Analyzed Block Ids",
+      "type": "array"
+    },
+    "uncovered_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Uncovered Notes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "summary",
+    "claims",
+    "analyzed_block_ids"
+  ],
+  "title": "UnderstandOutput",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

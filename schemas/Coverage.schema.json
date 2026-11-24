@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "CheckCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "check_type": {
+          "title": "Check Type",
+          "type": "string"
+        },
+        "expected_items": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Items"
+        },
+        "processed_items": {
+          "title": "Processed Items",
+          "type": "integer"
+        },
+        "scope_label": {
+          "title": "Scope Label",
+          "type": "string"
+        },
+        "remaining_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Remaining Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "check_type",
+        "expected_items",
+        "processed_items",
+        "scope_label",
+        "remaining_reasons"
+      ],
+      "title": "CheckCoverage",
+      "type": "object"
+    },
+    "ClaimCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "importance": {
+          "enum": [
+            "core",
+            "supporting",
+            "peripheral"
+          ],
+          "title": "Importance",
+          "type": "string"
+        },
+        "applicable_checks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Applicable Checks",
+          "type": "array"
+        },
+        "completed_checks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Completed Checks",
+          "type": "array"
+        },
+        "unresolved_checks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Checks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "claim_id",
+        "importance",
+        "applicable_checks",
+        "completed_checks",
+        "unresolved_checks"
+      ],
+      "title": "ClaimCoverage",
+      "type": "object"
+    },
+    "MaterialCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "total_blocks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Blocks"
+        },
+        "readable_blocks": {
+          "title": "Readable Blocks",
+          "type": "integer"
+        },
+        "analyzed_blocks": {
+          "title": "Analyzed Blocks",
+          "type": "integer"
+        },
+        "missing_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Missing Reason"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "total_blocks",
+        "readable_blocks",
+        "analyzed_blocks",
+        "missing_reason"
+      ],
+      "title": "MaterialCoverage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "material_items": {
+      "items": {
+        "$ref": "#/$defs/MaterialCoverage"
+      },
+      "title": "Material Items",
+      "type": "array"
+    },
+    "claim_items": {
+      "items": {
+        "$ref": "#/$defs/ClaimCoverage"
+      },
+      "title": "Claim Items",
+      "type": "array"
+    },
+    "check_items": {
+      "items": {
+        "$ref": "#/$defs/CheckCoverage"
+      },
+      "title": "Check Items",
+      "type": "array"
+    },
+    "unknown_denominators": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unknown Denominators",
+      "type": "array"
+    }
+  },
+  "required": [
+    "material_items",
+    "claim_items",
+    "check_items",
+    "unknown_denominators"
+  ],
+  "title": "Coverage",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

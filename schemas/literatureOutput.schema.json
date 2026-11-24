@@ -1,0 +1,352 @@
+{
+  "$defs": {
+    "QuoteRef": {
+      "additionalProperties": false,
+      "description": "A verbatim quote from one DocumentMap block; the kernel resolves match_status.",
+      "properties": {
+        "block_id": {
+          "title": "Block Id",
+          "type": "string"
+        },
+        "quote": {
+          "minLength": 3,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "quote"
+      ],
+      "title": "QuoteRef",
+      "type": "object"
+    },
+    "SubmitAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "supported",
+            "contradicted",
+            "insufficient_evidence",
+            "unresolved",
+            "not_applicable",
+            "not_checked"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "evidence_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Keys",
+          "type": "array"
+        },
+        "scope_checked": {
+          "title": "Scope Checked",
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "claim_id",
+        "outcome",
+        "evidence_keys",
+        "scope_checked"
+      ],
+      "title": "SubmitAssessment",
+      "type": "object"
+    },
+    "SubmitEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "manuscript",
+            "supplement",
+            "literature",
+            "code",
+            "user_assertion"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "content_summary": {
+          "minLength": 1,
+          "title": "Content Summary",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/QuoteRef"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "literature_source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Literature Source Id"
+        },
+        "section_hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section Hint"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "kind",
+        "content_summary",
+        "method"
+      ],
+      "title": "SubmitEvidence",
+      "type": "object"
+    },
+    "SubmitFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "strength",
+            "concern",
+            "clarification"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "proposition": {
+          "minLength": 1,
+          "title": "Proposition",
+          "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "hypothesis_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hypothesis Ids",
+          "type": "array"
+        },
+        "evidence_keys": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Keys",
+          "type": "array"
+        },
+        "potential_impact": {
+          "enum": [
+            "critical",
+            "major",
+            "minor",
+            "informational",
+            "not_assessed"
+          ],
+          "title": "Potential Impact",
+          "type": "string"
+        },
+        "impact_rationale": {
+          "title": "Impact Rationale",
+          "type": "string"
+        },
+        "confidence_basis": {
+          "title": "Confidence Basis",
+          "type": "string"
+        },
+        "recommended_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recommended Action"
+        },
+        "action_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "correct_fact",
+                "add_evidence",
+                "clarify_scope",
+                "improve_writing"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Type"
+        },
+        "neutral_question": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Neutral Question"
+        },
+        "issue_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "missing_experiment",
+                "novelty",
+                "numeric",
+                "theory",
+                "attribution",
+                "statistics",
+                "leakage",
+                "baseline",
+                "reproducibility",
+                "consistency",
+                "citation",
+                "presentation",
+                "scope",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issue Type"
+        }
+      },
+      "required": [
+        "key",
+        "kind",
+        "proposition",
+        "claim_ids",
+        "evidence_keys",
+        "potential_impact",
+        "impact_rationale",
+        "confidence_basis"
+      ],
+      "title": "SubmitFinding",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "check_type": {
+      "title": "Check Type",
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/SubmitEvidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "assessments": {
+      "items": {
+        "$ref": "#/$defs/SubmitAssessment"
+      },
+      "title": "Assessments",
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/SubmitFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "analyzed_block_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Analyzed Block Ids",
+      "type": "array"
+    },
+    "not_checked": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Checked",
+      "type": "array"
+    }
+  },
+  "required": [
+    "check_type",
+    "evidence",
+    "assessments",
+    "findings",
+    "analyzed_block_ids"
+  ],
+  "title": "CheckOutput",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

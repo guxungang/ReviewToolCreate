@@ -1,0 +1,953 @@
+# ScholarlyReview 论文自查与审稿辅助系统实施规范
+
+版本 1.0  
+编制日期 2026年11月22日  
+适用对象 产品负责人 软件开发者 测试工程师 学术顾问 AI 编程智能体
+
+## 文档目的与规范效力
+
+本规范定义一个拟开发的学术论文辅助系统 ScholarlyReview。系统面向作者投稿前自查和审稿人同行评审辅助，通过 Codex 或 Claude Code 使用，支持用户选择检查力度、时间和成本，提供有出处、可复核、可恢复的分析结果。本规范是产品需求、技术设计和验收依据，不代表软件已经实现或审稿能力已经通过实测。
+
+实施采用共享执行内核、结构化证据库、专业检查模块和两个宿主适配器。paper-review.skill 的证据评价方法、PaperDoctor 的主张分类核验思想、Open ScholarPeer 的文献检索与分阶段分析方法作为可追溯的参考；任务状态、数据协议、预算、权限和报告准入由新系统统一实现。
+
+“必须”表示发布阻断要求；“应”表示默认实现，偏离时必须记录理由及替代措施；“可以”表示扩展能力。凡时间、调用数和质量阈值均为本规范提出的初始产品参数或验收目标，不是已有项目的实测成绩。运行时必须显示实际能力及限制，不能把设计目标标成已完成能力。
+
+本规范中的命令、目录、数据字段和系统名属于待实现的接口定义。文中所有示例独立给出背景，不依赖任何历史对话。来源编号在附录中对应公开资料和固定版本源码。
+
+## 1 产品范围与关键概念
+
+### 1.1 产品目标
+
+系统帮助使用者完成五项工作：准确理解论文的研究问题与贡献；核对主张与证据；查找直接相关的已有研究；识别真正影响结论的问题；生成符合使用场景的报告。系统必须同时记录论文的优点、支持性证据和未解决疑点，不能以问题数量衡量审稿质量。
+
+首个正式版本支持计算机及相关工程领域的实证、系统和理论论文。通用规则覆盖研究意义、创新性、技术正确性、实验有效性、可复现性、内部一致性、表达和投稿要求。机器学习、网络与分布式系统、安全三个领域配置作为首批专用配置。其他学科可以使用通用配置，但报告必须披露缺少专用标准，不得暗示具备所有学科的专业评审能力。
+
+系统不自动提交审稿、不替编辑作录用决定、不自动改写作者原稿、不证明不存在任何错误、不识别匿名稿件作者、不凭文本相似度指控学术不端。修改原文属于独立功能，只有用户明确要求后才能生成可审阅的补丁或副本。
+
+### 1.2 术语
+
+| 术语 | 定义 |
+| --- | --- |
+| 宿主 Host | 用户正在使用的 Codex 或 Claude Code；提供交互、模型和部分工具能力 |
+| Skill | 宿主可发现的工作指令与资源入口；不承担不可绕过的预算或安全控制 |
+| 执行内核 Core | 管理任务、数据校验、预算、权限、状态和输出的确定性程序 |
+| 稿件 Paper | 一项独立评审对象；不同稿件不得共享私有分析上下文 |
+| 稿件版本 PaperVersion | 正文、附录、数据和代码引用组成的不可变输入快照 |
+| 运行 Run | 在一个稿件版本、角色、预算、权限和标准下执行的一次分析 |
+| 主张 Claim | 作者在给定条件下实际提出、能够单独评价的断言 |
+| 审查假设 Hypothesis | 系统为开展检查提出的待证问题，不代表作者已经作出该断言 |
+| 证据 Evidence | 有来源、位置、版本、获取方法和可检查内容的记录 |
+| 发现 Finding | 对一个或多个主张形成的候选优点、缺陷或澄清问题 |
+| 复核 Verification | 针对候选发现重新检查原始材料及反证的过程 |
+| 产物 Artifact | 输入快照、规范化正文、表格、计算记录、报告等不可变文件 |
+| 检查覆盖 Coverage | 实际处理的材料与检查项目及其分母、深度和未完成原因 |
+
+### 1.3 三个相互独立的配置轴
+
+第一轴是使用角色 author 或 reviewer，决定目的、措辞和输出。第二轴是投入力度 quick、standard、deep、reproduction 或 custom，决定覆盖和资源分配。第三轴是执行方式 interactive 或 managed，决定调度与预算控制能力。角色不能暗中改变证据标准；新增预算带来的新证据可以改变结论，但必须记录依据和版本；选择深度检查不自动授权上传稿件或执行论文代码。
+
+## 2 双模式需求与输出合同
+
+### 2.1 作者投稿前自查
+
+作者模式回答论文目前有哪些值得保留的贡献、哪些问题阻碍投稿、哪些修改能加强证据，以及在现有期限内应该先做什么。必须支持完整自查、临近截止检查、单项核验和修改稿复查。
+
+输入至少包括可读正文和角色。可选输入为附录、LaTeX 或 Word 源稿、代码、结果表、目标期刊或会议、投稿日期、格式要求、修改期限以及不能新增实验等约束。缺少代码不阻止正文自查。缺少计算某项指标必需的输入时，不得声称完成复算；完整计数表或混淆矩阵可以作为复算输入，但该复算不等于验证底层原始数据或重现实验。
+
+默认输出为作者报告、证据记录、覆盖说明和修改计划。修改计划将行动分为提交前应解决、优先加强、可选优化，分别记录问题依据、影响的主张、建议修改、预期收益、工作量区间及验证方式。工作量必须标明是估计，不能保证实验或人工修改完成时间。
+
+投稿准备度采用 blocked、conditional、no_blocker_found、not_assessed 四值，按固定顺序判断：存在已确认且阻碍目标投稿要求或核心结论的问题，使用 blocked；否则核心检查覆盖不足，使用 not_assessed；核心检查已完成但存在明确待满足条件或待澄清事项，使用 conditional；其余使用 no_blocker_found，表示仅在已完成范围内未发现阻断问题。系统不得给出缺乏校准依据的录用概率。
+
+在“不能补实验”约束下，系统仍如实报告实质性证据缺口，同时分别提出可执行的澄清、纠错或措辞调整方案。系统不得为了满足约束而把缺口改判为通过，也不得默认用保守措辞削弱所有贡献。
+
+### 2.2 审稿人辅助评审
+
+审稿模式帮助审稿人理解研究、核实贡献、检查关键证据，并形成可自行修改的意见草稿。默认输出研究概述、证据充分的优点、主要问题、次要问题、可能改变判断的澄清问题和必要参考文献。
+
+系统另行保存审稿人内部证据报告。发给作者的草稿、给编辑的保密意见和内部分析必须是三个不同的输出视图。只有用户或已核验的审稿表单要求时才生成评分及建议决定；评分选项、释义和必填字段来自该次投稿的有效标准，不从模型记忆补造。
+
+缺少审稿标准时，可以按通用标准生成意见，必须把期刊适配和评分状态记为未评估。缺少足够材料或缺少独立复核时，可以提出有明确不确定性的澄清问题，不能把疑点写成已经证明的错误。
+
+外行辅助配置 generalist 只限制最终意见的专业断言范围，不取消必要的事实核查。未经可靠技术验证的复杂证明问题应保留在内部或写成澄清问题，不能使用更肯定的语气掩盖专业能力限制。
+
+### 2.3 模式共享与隔离
+
+两种模式必须共享解析、文献检索、计算、证据和复核模块。同一冻结证据与已核实判断在作者视图和审稿视图中必须保持相同事实状态、适用范围和不确定性。独立 Run 产生分歧时保留冲突并进入复核，不能按角色倾向覆盖事实。作者希望投稿或审稿人倾向拒稿均不能作为结论先验。
+
+角色变更创建新的 Run，复用符合权限的不可变基础产物，不复用旧的结论草稿。用户历史私稿、其他审稿的未公开信息和个人偏好不得进入新的稿件上下文，除非用户明确将材料纳入本次输入。
+
+## 3 投入力度与用户选择
+
+### 3.1 首版预设
+
+以下数值是资源上限的初始预设，不是完成质量或处理时长保证。全部预设均允许用户覆盖，内核必须保存解析后的有效配置。
+
+| 预设 | 主动运行时间上限 | 分析任务上限 | 外部检索请求上限 | 外部全文数上限 | 工作进程并发上限 |
+| --- | --- | --- | --- | --- | --- |
+| quick 快速重点检查 | 10分钟 | 12 | 12 | 4 | 1 |
+| standard 标准检查 | 45分钟 | 48 | 60 | 12 | 2 |
+| deep 深入检查 | 120分钟 | 120 | 160 | 30 | 3 |
+| reproduction 重点复核与复现 | 240分钟 | 160 | 200 | 40 | 3 |
+
+分析任务数包括提取、判断、复核和模型报告生成；重试占用模型请求预算但不创建新的逻辑任务。检索请求数包括重试、元数据获取和外部全文读取，缓存命中不扣网络请求数。外部全文数按不同作品版本计数，不包含用户已经提供的材料。所有限制同时生效，以先达到的限制触发停止规则。
+
+quick、standard、deep、reproduction 的 max_total_tokens 默认分别为 40,000、180,000、500,000、750,000，表示输入与输出的总量；max_input_tokens 和 max_output_tokens 默认 null，用户设置时与总量限制同时生效。同一内容被多次发送必须重复计量；服务商已计入输出的推理 token 不得重复相加。视觉和缓存依实际口径记录，不以字符数伪装真实用量。无法观察宿主完整模型用量时，这些限制仅为目标并显示 unknown 或 estimated，不能声称已经强制封顶。
+
+费用不预填虚构的固定美元价格。用户可设置金额上限及计费币种；未提供金额上限不等于允许新增付费服务。已有会话中获准使用的模型可沿用，另收费的 OCR、检索或云计算必须已有可核对的授权与额度。
+
+### 3.2 每档实际覆盖
+
+quick 优先阅读摘要、贡献、结论、主要方法和关键结果，检查明显矛盾、可独立复算的关键数字及最接近前作。若未读完正文和附录，必须标“重点检查”，不得使用“完整审稿”标题。
+
+standard 以覆盖全部可读正文和已提供附录为目标，检查主要主张、对比公平性、关键图表、主要参考文献和结果一致性。不能在预算内完成时，交付部分报告和未完成项，不能为了显示完成而略去缺口。
+
+deep 增加相关工作覆盖、独立上下文复核、理论与代码重点检查和更广泛的数值一致性检查。reproduction 在 deep 的基础上安排一项或多项有资源清单的目标实验；默认 GPU 额度为零，未取得明确资源授权时只生成复现计划，不启动训练。
+
+任何档位都必须保留来源定位、未完成项说明和最终意见核查。不同档位调整检查范围、抽样和复核数量，不能降低引用真实性或确认错误的证据要求。
+
+### 3.3 启动与动态调整
+
+用户显式指定角色和投入时直接执行已授权步骤。用户未选择投入时，入口展示四档及 custom 的简要范围，由用户选择；选择前只执行本地文件存在性、格式和宿主能力检查，不隐含启动昂贵的审稿。用户要求“直接开始”且未给预算时，采用 quick，并明确显示生效范围。
+
+每次启动必须提供计划摘要：稿件版本、角色、范围、标准、材料缺失、联网和代码执行权限、预算、控制能力、预期输出。现有明确授权可直接形成可见记录，无须为同一动作反复询问。追加预算、扩大外发范围或运行未获准代码时才请求新增授权。
+
+用户可以暂停、停止、调低余下范围或提高总预算。预算调整应记录为版本化事件；提高后的值是新的累计总额度，不是每个阶段重新获得一份完整额度。
+
+## 4 上游基础与复用决策
+
+### 4.1 固定参考版本
+
+| 项目 | 本规范核验的提交 | 主要参考价值 |
+| --- | --- | --- |
+| jam-cc/paper-review.skill | bb9900ff7a95e6a28092ab0a9e1d81098f41634e | 主张与证据评价 创新性比较 意见精简和引用核验 |
+| QinghongLin/paperdoctor | b44221d35b4cfd1d99baf2256ffebb1d7b45effd | 主张分解 专业核验分工 解析定位与可视化思路 |
+| amirkiarafiei/open-scholar-peer | 229370cbe34cde85499addd5246c95f1f1729f97 | 分轮文献检索 Provider 工具 Q&A 复核和产物追溯 |
+
+以上结论基于静态源码阅读，未运行三套系统进行审稿质量对照。paper-review.skill 的四阶段流程已支持自查和审稿，主要提供指令；PaperDoctor 有 11 个技能和实际 Python 工具，但判断及实验运行仍大量依赖宿主指令；Open ScholarPeer 有检索代码与阶段产物规范，但阶段指令不等于具备完整保证的调度程序。[S01–S08]
+
+### 4.2 复用方式
+
+paper-review.skill 的贡献评价、证据要求及表达规范转化为评估与报告模板。相关工作调查统一交由文献模块，避免重复搜索。
+
+Open ScholarPeer 的 Provider 可以通过适配器复用；三轮检索、领域脉络、基线搜寻和问答转化为可选任务模板。新系统不维护第二份 .brain 状态，不运行其安装脚本覆盖用户配置。
+
+PaperDoctor 的模块划分、结构化主张和页面定位可作为实现参考。其上游 JSON 只作为待核实导入数据，不直接成为新系统事实。新系统必须具备独立本地解析路径，Mathpix 和该仓库的 MinerU 实现均视为会外发 PDF 的服务，不作为离线回退。[S03–S05]
+
+### 4.3 必须修正的上游语义
+
+PaperDoctor 的 read-exp 指令允许未做完整检查的项目标 pass；新系统必须标 not_checked 或部分覆盖。显式作者主张与模型推断必须分开，不能把没有限定的“有效”自动解释成对所有场景有效。原样运行、修补后运行、资源不足和指标不一致必须分开建模。[S04–S06]
+
+Open ScholarPeer 的工具可能以含 error 的列表或带截断标记的结果返回；适配器必须识别错误、分页和不完整结果。无效 Provider 配置必须拒绝执行，不得回退为启用全部来源。超时停止等待不等于底层任务结束，取消机制必须管理实际进程或可取消网络请求。[S07–S09]
+
+### 4.4 来源与许可治理
+
+对每个复用文件记录仓库、提交、原路径、文件摘要、许可证和本地修改说明。paper-review.skill 和 Open ScholarPeer 的参考版本有 MIT LICENSE，复制相关内容时保留通知。PaperDoctor 的说明及技能元数据标有 MIT，但核验版本未发现完整的独立根许可证文件；复制并分发具体代码前必须核实授权材料。授权材料未明确的模块采用独立实现或通过外部工具接口调用，不因此阻塞整个产品设计。[S01–S03、S10]
+
+禁止运行时自动跟随 main 分支更新。上游升级经适配测试、许可证核验和版本锁定后进入新发布。
+
+## 5 总体架构与技术边界
+
+### 5.1 五层结构
+
+接入层提供 paper-preflight 和 paper-referee 两个 Skill，解析用户意图并调用统一接口。宿主适配层把 Codex、Claude Code、可选模型 API 和本地模型接入转换为相同的 TaskRequest 和 TaskResult。
+
+执行层管理任务依赖图、预算、权限、重试、取消和状态。证据层管理稿件版本、主张、证据、发现、复核记录和覆盖。专业模块层处理解析、检索、技术审查、实验、数值与表达。输出层仅使用获准进入报告的有效记录生成结果。
+
+数据流固定为：输入快照及标准 → 解析与主张提取 → 内部证据检查与外部文献调查 → 候选发现 → 反向复核 → 学术影响判断 → 分角色报告。检索和内部检查可以并行；报告必须等待必要的复核和准入判定，预算不足时生成明确的部分报告。
+
+### 5.2 核心技术选择
+
+首版使用 Python 3.11 及以上，发布测试覆盖 3.11、3.12、3.13。使用 Pydantic 2 或等价严格类型层，导出 JSON Schema 2020-12。所有外部输入默认拒绝未知字段，扩展只允许进入带命名空间的 extensions。
+
+SQLite 管理本机单用户状态和账本，启用外键，采用单写入协调器。产物以 SHA-256 内容寻址保存在工作目录。JSONL 是可导出的事件日志，不是另一份可独立修改的权威数据库。Markdown 和 HTML 是输出视图，不作为后续任务解析事实的默认来源。
+
+文本 PDF 优先使用本地解析器；页面渲染、OCR、LaTeX 解析和代码索引通过独立接口接入。建议使用 pypdf/pdfplumber、pypdfium2、可选本地 Tesseract 和 Tree-sitter，具体依赖版本在实现时锁定并测试。检索使用经配置允许的学术来源。HTML 报告使用本地资源和模板转义，不加载外部脚本。
+
+首版不依赖向量数据库、分布式队列或公网服务。文档分块检索先采用 SQLite FTS 或本地关键词索引；只有真实规模和检索评测证明需要时增加向量检索。新增组件仍须遵守相同证据位置、权限和缓存合同。
+
+### 5.3 唯一状态来源
+
+模型只能通过受校验接口提交候选记录，不能直接修改数据库、预算、报告准入标签或原始稿件。所有模型输出先经过结构校验，再经过跨字段语义和证据引用校验，最后由内核提交。
+
+系统应保存简洁的判断依据、证据和计算过程，不要求保存模型隐藏推理。提供原始来源和可重跑的计算比记录长篇内部思考更有验收价值。
+
+## 6 执行方式和宿主适配
+
+### 6.1 交互协作方式
+
+interactive 由当前宿主 Agent 调用核心 CLI 或 MCP。无需另开模型 API 账户，可利用用户已有能力，适合有人监督的使用。任务状态、证据校验、网络请求与本地实验资源仍由内核管理。
+
+内核通常不能完整观察外层聊天、宿主内部工具循环及宿主后台 Agent 的模型消耗。交互方式必须把模型费用及相关时间限制标为建议值或部分计量，不可宣称对整个会话强制限额。用户要求严格且当前方式无法满足的预算时，返回明确的不支持原因和可选执行方式，不能静默降级。
+
+### 6.2 受控执行方式
+
+managed 由核心启动边界清晰的非交互 Worker。Codex 适配 codex exec，Claude Code 适配 claude -p；每个 Worker 只处理一个 TaskRequest。Worker 不创建新的总调度器、不扩大权限、不绕过内核直接开展额外搜索或实验。
+
+非交互 CLI 可以改善进程超时、结构输出、调用记账和上下文隔离，但不天然保证完整美元硬上限。只有每个计费请求都经过可计算上界的受控 Provider 或网关时，才能使用 reservation_bounded 的费用控制声明。外层交互会话成本必须另列，不能计为零。[S11–S14]
+
+直接 API 模式使用用户明确配置的 API 凭据，不提取、转换或绕过 Codex 或 Claude Code 的登录凭据。local_only 策略需要实际本地模型及断网工具链；云端宿主读取私稿本身已经涉及外发，不能仅凭本地保存文件称为完全离线。
+
+### 6.3 HostCapabilities 合同
+
+能力状态统一为 supported、unsupported、unknown，并附宿主版本、适配器版本、探测时间和探测方法。必须覆盖交互 Skill、非交互 Worker、结构化输出、事件流、用量报告、费用报告、每请求输出限制、原生预算限制、原生回合限制、独立上下文、子 Agent、MCP STDIO、图像读取、沙箱能力及取消范围。
+
+probe 只能读取版本、帮助和配置能力，不发送稿件，也不产生收费调用。需实际模型测试才能确认的能力先记 unknown，再在已授权任务中记录测试结果。不能根据“产品支持”推断本机账户、版本和组织策略必然允许。
+
+### 6.4 宿主接入约定
+
+| 接入项 | Codex | Claude Code |
+| --- | --- | --- |
+| 项目 Skill 根目录 | .agents/skills | .claude/skills |
+| 用户 Skill 根目录 | ~/.agents/skills | ~/.claude/skills |
+| 作者入口 | $paper-preflight | /paper-preflight |
+| 审稿入口 | $paper-referee | /paper-referee |
+| 非交互调用 | codex exec | claude -p |
+| 结构输出能力 | --output-schema 文件 | --json-schema JSON |
+| 机器事件能力 | --json | --output-format stream-json |
+
+这些接入点按编制时的官方文档核验。发布版本必须通过实际宿主兼容测试，并在 capability probe 中检测，不能只依赖表格。结构化输出参数不能替代内核语义校验。[S11–S14]
+
+Claude Code 的 allowed-tools 是预授权机制，不能作为保密或只读边界。两个宿主都必须使用实际权限配置、受控路径、工具代理和必要沙箱约束。安装器不得默认修改用户全局指令，不得覆盖同名 MCP 服务或其他项目配置。[S13]
+
+## 7 端到端任务流程
+
+### 7.1 接收与输入冻结
+
+创建 Paper 和 PaperVersion。复制或内容寻址快照保存输入，计算文件摘要，记录正文、附录、代码、数据、标准和权限来源。文件名不能作为版本标识。Run 只读取冻结快照；外部源文件改变时提示存在新版本，不破坏正在检查的旧快照。用户将新版本纳入检查时创建新 PaperVersion 和新 Run，通过显式映射复用有效基础产物。快照本身的摘要异常记为 corrupt，不能作为普通版本变更处理。
+
+解析用户模式、预算、截止日期和标准。文献时间基准在作者模式使用计划投稿日期，未提供时使用检索日期；未来计划日期不能使检索覆盖未来尚未公开的工作。审稿模式使用已知投稿日期；投稿日期未知时记录 unknown，不能以评审当天替代并判定作者漏引近期工作。
+
+### 7.2 材料解析与可读性检查
+
+产生 DocumentMap，列出章节、段落、表格、图、公式、参考文献和附录。各块保留原始位置及抽取质量。PDF 页面序号和印刷页码分开存储。双栏顺序、图像表格和公式识别不确定时记录歧义；重要证据需回看渲染原页。
+
+只有摘要可读时允许摘要级分析，不能启动以全文为前提的确认性审稿。整份正文不可读时运行 blocked，并交付材料错误说明。OCR 失败、密码保护、损坏文件和缺少附录各有独立错误类型。
+
+### 7.3 理解与主张建模
+
+形成任务、方法、贡献、假设、数据和主要结果的结构摘要。抽取主张时拆分复合结论，保留原文中的条件、范围、概率措辞和比较对象。原文没有的全称断言不得由模型添加。
+
+重要性由主张对论文贡献的作用决定，分 core、supporting、peripheral。提取数量不设必须达到的配额。有限预算优先覆盖摘要与贡献清单中的核心主张，并记录还未覆盖的区域。
+
+### 7.4 制定检查计划
+
+每个检查任务必须有输入、适用条件、优先级、预算估计、预期产物、停止条件及依赖。规划器将核心主张与适用检查建立关系，内核检查资源和权限。全文概括、创新性判断、数值计算和复核是不同任务，不能互相冒充。
+
+### 7.5 证据采集和候选分析
+
+在批准范围内并行执行论文内部核验和外部文献调查。所有模块只提交候选发现及证据，不给出整体录用建议。重大潜在错误优先进入复核，避免把全部预算用于继续发现更多低价值问题。
+
+### 7.6 反向复核和学术判断
+
+复核者拿到中性问题、相关原文、附录查询能力和证据位置，先寻找反证和替代解释，再判断候选问题。结构摘要可以帮助导航，但不能代替原文。完成后评估问题成立程度、影响范围和可修复性。
+
+### 7.7 报告和版本复查
+
+报告生成只使用有效且获准导出的记录，不在写作时另造问题或文献。生成后核对实质判断与 Finding/Assessment ID 的映射，检查不确定性、适用范围和影响是否被改写升级，含事实预设的疑问句也在检查范围。新判断退回候选流程；无法完成核对时采用确定性模板。修改稿复查创建新 PaperVersion 和 Run，匹配主张、表格和代码差异，重查受影响结论并保持历史报告不可变。
+
+
+## 8 专业检查模块
+
+### 8.1 通用模块合同
+
+每个模块必须声明模块 ID、版本、输入类型、适用条件、需要的能力、输出 Schema、默认预算估计和失败类型。输出必须包含核验对象、原始位置、方法、有效范围、证据、结果及未解决事项。模块不得自行追加预算、扩大网络权限或决定整篇论文的录用建议。
+
+所有检查同时支持三类结果：支持主张的证据、与主张冲突的证据、材料不足。只输出缺点的模块不满足专业评价要求。重复发现可以合并展示，但不能删除不同来源的证据或把同一问题计为多个独立缺陷。
+
+### 8.2 论文解析与页面定位
+
+ingest 模块处理 PDF、LaTeX 目录、DOCX、Markdown，以及 CSV/JSON 数值附件。首版必须完整支持文本 PDF 和 Markdown；LaTeX 与 DOCX 允许通过适配器支持，但必须记录转换损失。扫描 PDF 只能在 OCR 能力已配置时承诺识别。输入压缩包必须防止路径穿越、符号链接越界和超大解压。
+
+解析产物保留段落文本、原页渲染、表格单元格、图注、公式原始片段、参考文献及质量标记。自动匹配位置使用 exact、fuzzy、ambiguous、unresolved 四种状态；模糊匹配或多处重复不能静默选第一处并称为精确证据。
+
+表格识别必须保留行列标签、合并单元格、单位、脚注、数据集和实验条件。数值无法可靠抽取时，报告“无法复核该数值”，不得凭图片印象生成错误指控。下游只访问统一 DocumentMap，不硬编码 Mathpix 或其他解析器目录。
+
+### 8.3 相关工作与创新性
+
+literature 模块采用领域问题、技术方法、时间扩展三种搜索策略，按预算启用。起点包括直接前作、竞争方法、简单基线和权威基准定义。每次搜索保存实际查询、Provider、时间、返回数量、分页情况、截断、失败和筛选理由。
+
+文献身份、内容证据和比较适用性分开记录。标题、DOI 和作者只能支持文献身份；关于技术机制、实验条件或结果的批评必须访问足够的正文内容。搜索摘要不是默认的技术核验依据。
+
+比较表至少记录任务、数据集、数据划分、输入信息、监督方式、训练或推理资源、指标定义和评估协议。不具备可比性的数字只作为背景，不能据此直接认定投稿方法性能较差。首次公开日期、所读版本日期和正式发表日期分开保存。
+
+缺少投稿日期时，近期工作在时间上标 uncertain；投稿之后公开的工作可以作为背景或作者修改参考，不作为投稿时应当引用的强制依据。创新性判断围绕技术差异和贡献价值，不以“使用相同模型名称”认定等价，也不把未检索到前作等同于首次提出。
+
+### 8.4 方法理论与算法
+
+technical 模块检查问题定义、变量定义域、假设、公式、约束、算法描述与论文主张是否一致。必须区分证明审阅、符号计算、有限样例测试、反例搜索和形式化证明。有限测试通过不能证明一般定理正确。
+
+理论反例只有在满足原命题条件时才能否定该命题。发现缺少证明时应报告论证不足，不自动报告命题错误。非凸性、混合整数变量或某个算法运行时间不单独构成 NP-hard 的证明。
+
+系统论文重点检查问题模型与可执行决策一致性、时间顺序、资源守恒、约束可行性、复杂度中的输入规模。安全论文重点检查威胁模型、攻击者能力、攻击覆盖与防御目标。必要专业能力不可用时，保存疑点及需要人工核验的具体步骤。
+
+### 8.5 实验设计与因果归因
+
+experiment 模块检查研究问题与实验对应关系、数据划分、泄漏风险、基线来源、参数与训练资源、消融、随机性、统计证据和结论范围。缺少某项实验只在它影响具体主张时进入主要问题。
+
+同时改变模型组件、数据量、调参预算或教师模型时，不能把全部收益归因于新组件。系统可以确认缺少有效隔离证据，但不能由此认定组件无效或数据造假。外部论文中的基线数字需要核对设置；复制公开基线数字不自动构成不当行为，但对不可比设置必须说明限制。
+
+统计分析先检查样本量、重复运行、方差、配对关系及分布假设。缺少必要信息时不得生成 p 值或置信区间。确认“现有证据不足以证明显著”与确认“结果不显著”是两个不同判断。
+
+### 8.6 独立数值核验
+
+numeric 模块必须用确定性程序完成可识别计算，保存结构化输入、公式标识、代码版本、单位、舍入规则、容差和输出。首版内置总和、均值、相对变化、百分点变化、加权汇总、混淆矩阵指标和跨位置一致性检查。
+
+分类指标先明确矩阵行列方向、类别支持数、是否归一化、平均方式和零分母处理。macro、micro、weighted F1 必须分别命名。只有行归一化比例而没有类别样本数时，不能默认类别等量计算总体准确率或 weighted F1。
+
+显示值采用舍入区间比较。百分数一位小数 84.0% 与比例 0.8402 可以相容；不能要求全部显示值逐位相同。提高 4 个百分点和相对提高 5%分别计算；基线为零时相对提升未定义。
+
+涉及统计显著性、运行时间或随机训练的容差必须来自已声明协议或事先制定的指标级规则。禁止将统一 1%–2% 作为所有指标的成功标准。OCR 不确定、单位不明确或指标定义不明确时输出 unresolved。
+
+### 8.7 引用与内部一致性
+
+reference 模块分别检查文献身份、正文引用关系、引用是否支持对应论述。无法找到 DOI 不等于文献虚假；题目真实不等于引用相关；预印本与正式版本不能简单当成两篇不同贡献。
+
+consistency 模块连接摘要、方法、结果、图表、附录和结论中的同一对象。首版检查数据集名称、样本数、指标、变量、方法名称、表图编号和实验条件。疑似数据集标签互换必须用样本数、可复算指标和条件进行交叉核查，不凭相近数值断言互换。
+
+style 模块检查表达、逻辑、冗余、术语和版式。风格偏好与技术错误分开。无影响的语言细节不得挤占核心证据核验预算；正式意见不得把所有语言优化写成主要问题。
+
+### 8.8 代码核对与实验复现
+
+code 模块默认静态读取，记录仓库提交、文件路径、行范围、代码片段摘要和依赖。Tree-sitter 或字符串索引只帮助定位，不自动证明实现正确。
+
+reproduce 模块必须先生成 ExperimentPlan，包含代码和数据摘要、入口及参数数组、环境锁、资源上限、网络规则、预期指标、容差、停止条件和输出位置。运行时使用隔离环境；项目提供的 shell 字符串不能直接交给 eval 或 shell=True 执行。
+
+原样运行 original、纯环境适配 environment_adapted、算法或配置修改 patched 使用不同实验 ID 和补丁记录。修改后结果不能冒称原样复现。OOM、缺数据、无依赖、超时、权限阻断和数值不符使用不同状态。不能运行不等于论文错误。
+
+### 8.9 反向复核
+
+validate 模块对拟写入正式报告的实质性结论执行反证检查。对“缺少实验”重新查正文、附录和补充材料；对“缺乏创新”检查前作是否真正等价；对数值错误回看原图、标签和计算条件。
+
+优先使用新的隔离上下文，输入中性核验问题及原文证据，不提供需要迎合的结论。盲式复核不允许读取原候选结论、先前报告或其他稿件产物，记录 context_lineage 和可访问输入清单。需要直接检查既有批评时可以提供候选文本，但 blinded=false。新进程本身不构成隔离证明；继承会话或自动记忆时标 inherited，当前交互会话自查标 same_context。不能排除其他稿件上下文时，须使用受测的独立 Worker 才能声明隔离。同一模型的不同上下文不代表统计独立。
+
+任何已确认批评都必须有足以支持具体命题的原始证据及明确适用条件。major 或 critical 还必须经过下列至少一种复核：输入已核实的确定性计算或有效反例；带原始材料的独立上下文复核；使用者记录具体材料及核验结果的复核。第二个模型附和或使用者身份不是事实成立的充分条件；主观赞同仍是 user_assertion。只有同一上下文自查且缺乏确定性证据时，不得升级为 confirmed major 或 confirmed critical。
+
+## 9 数据模型与语义约束
+
+### 9.1 通用数据规则
+
+所有结构化记录采用 UTF-8 JSON、schema_version=1.0.0、UTC RFC3339 时间及明确单位。内部生成 UUID 作为实体 ID，完整 SHA-256 作为内容标识；展示时可以短写，数据库不可只用截断 hash 判等。小数金额用十进制字符串或最小货币单位整数，禁止二进制浮点累积记账。
+
+身份字段按作用域要求：Paper 包含 workspace_id 和 paper_id；PaperVersion 再包含 paper_version_id；运行派生产物再包含 run_id。公共文献不含私稿内容，通过对应 Run 的引用关系关联。所有持久记录都有 created_at、producer 和 schema_version。输入版本改变不就地修改旧记录；跨版本相似主张用 supersedes 或 corresponds_to 关系连接，不能凭相似文字沿用旧结论。
+
+空数组表示已处理但没有记录。业务证据中的 null 表示未知或不适用，应在 limitations 或原因字段解释；配置项已定义的 null 语义按配置合同处理。不能用空数组代表 Provider 调用失败。未知字段被拒绝，错误对象与业务结果分离。
+
+### 9.2 必须实现的实体
+
+| 实体 | 必需业务字段 | 关键约束 |
+| --- | --- | --- |
+| PaperVersion | input_artifacts 标题语言清单 manifest_hash | 正文及附录均版本化 |
+| RunConfig | mode effort execution budget policy rubric cutoff | 保存全部默认值展开后的生效配置 |
+| DocumentBlock | block_id kind text locator extraction_quality | 不可定位片段不得伪造页码 |
+| Claim | claim_id original_text normalized_text scope origin importance source_refs | 作者主张必须有原文锚点 |
+| Hypothesis | hypothesis_id question motivation related_claim_ids | 不能充当作者原话 |
+| Evidence | evidence_id kind payload_or_artifact locator provenance access_level | 证据有内容且能够检验 |
+| Assessment | claim_id check_type outcome evidence_ids limits | 判断限于指定检查范围 |
+| Finding | finding_id kind proposition claim_ids evidence_ids disposition impact | 一项主张可有多条发现 |
+| Verification | verification_id finding_id method inputs result counterevidence independence | 保留反证和驳回原因 |
+| Task | task_id type dependencies input_hash state attempts budget | 只由内核转换状态 |
+| BudgetEntry | call_id reservation usage amount basis billing_state | 重试及未知费用均保留 |
+| Coverage | material_scope check_scope numerator denominator reasons | 分母不可凭模型感觉生成 |
+| ReportManifest | report_id snapshot_id admitted_finding_ids evidence_ids outputs | 所有输出绑定同一快照 |
+
+字段表中的中文词表示需要在实现 Schema 中展开的概念；附录 A 定义核心 API 的精确英文键。开发必须先完成 Schema 并通过测试，专业模块不得自行创造同义字段或未登记状态。
+
+### 9.3 来源与定位
+
+Evidence 的 kind 必须为 manuscript、supplement、literature、code、calculation、execution、user_assertion 中之一。user_assertion 只代表使用者提供的信息，不自动变成独立核实的事实。
+
+文档定位包含 artifact_id、artifact_sha256、block_id、page_index、page_label、bbox、text_span 和 match_status。page_index 从 1 开始；page_label 是原文印刷页码，可为罗马数字或空值。bbox 使用应用页面旋转后的左上角坐标系、归一化到 [0,1] 的 x0、y0、x1、y1；text_span 使用 Unicode 码点的左闭右开范围。没有坐标时必须为 null，不填写零矩形。
+
+代码定位包含 repo_commit、relative_path、line_start、line_end、snippet_sha256，行号从 1 开始且两端包含。表格定位还包含 table_id、row_key、column_key、raw_value、normalized_value、unit、metric_definition 和条件关联。外部证据包含 URL、规范化作品 ID、版本、获取时间、公开时间依据和访问层级。
+
+访问层级 metadata、abstract、partial_fulltext、fulltext、supplied_primary 分别记录；能够确认标题不表示读过全文。来源的保密级别、许可及导出对象属于证据元数据，报告时必须检查。
+
+### 9.4 三套状态必须分离
+
+任务状态描述执行：planned、ready、running、completed、partial、blocked、failed、cancelled、skipped、stale。blocked 必须带 policy、budget、missing_input、missing_capability 或 dependency 原因。completed 只表示任务按所选范围完成，不表示论文正确或全文覆盖。
+
+Assessment.outcome 描述主张与指定证据：supported、contradicted、insufficient_evidence、unresolved、not_applicable、not_checked。supported 必须说明支持范围；没有发现问题不等于所有性质均被验证。
+
+Finding.disposition 描述候选发现：candidate、confirmed、refuted、unresolved、dismissed。Finding.kind 为 strength、concern、clarification。Finding.impact 为 critical、major、minor、informational 或 not_assessed。执行失败不能自动设置为 contradicted 或 critical。
+
+critical 表示已确认问题使核心方法或结果在所声称范围内不可成立，或者核心证据已失效到无法支持主要结论；major 表示影响主要贡献、关键证据或需要实质性修正；minor 表示局部且不改变核心判断。材料缺失、执行失败和待核实疑点不直接构成 critical；疑点可记录 potential_impact，正式报告保持待澄清状态。
+
+Finding、Evidence 和 Artifact 另有 validity=current、stale 或 corrupt，表示对目标快照的数据有效性。失效与损坏不覆盖原学术 disposition；Task.state 可以为 stale，但不得把它混入 Finding.disposition。有效性作为带目标快照的事件投影维护，不改写历史报告。
+
+### 9.5 报告准入函数
+
+内核必须实现可单测的 admit_finding。事实性批评入选要求：发现为 confirmed；证据 ID 存在；稿件与版本一致；相关记录 validity=current；原文或计算定位有效；符合指定影响级别的复核要求；外部比较满足时间及适用性条件；证据允许向目标受众导出。证据存在及格式合法不等于实质支持结论，必须检查 Verification 的实质结果及其依据，不能采用模型数量投票。
+
+无法满足条件的记录不得进入已确认主要问题。unresolved 可以进入澄清问题，并明确哪些材料或结果会改变判断。disposition 为 refuted 或 dismissed、或者 validity 为 stale 或 corrupt 的记录不得进入正式问题清单，但保留内部审计。
+
+同一问题经多个模块发现不增加其真实性。内核以共同证据对象、主张和机制进行关联，保留独立 Finding ID 和 duplicate_of；展示按主题合并，并让每个问题的证据仍可单独追溯。
+
+### 9.6 覆盖的计算
+
+覆盖按材料、主张和检查类型分别统计。页面可解析率不等于阅读率，主张已提取率不等于已验证率，读取全文不等于每个结论都检查完毕。
+
+报告至少给出可读正文页数、已分析页块、附录状态、已提取核心主张、已检查核心主张、已复核的拟报告问题、外部全文访问数，以及未完成原因。分母未知时写 unknown。主张提取尚未覆盖全文时，不得声称“已验证全部主张的百分之多少”，只能说明对已识别主张的覆盖。
+
+## 10 预算账本与调度
+
+### 10.1 预算维度
+
+每项用户授权的连续分析建立 BudgetAccount，Run 只是其执行单元。首次计划分配 budget_account_id；同一任务的版本更新或继续分析默认沿用该账户，原 Run 和新 Run 的开销及在途预留合计不能超过账户总额。新建独立账户需要明确的新任务预算，不能用更换 run_id 绕过原额度。单次 Run 上限与账户累计上限同时检查。
+
+Budget 包含 max_active_seconds、absolute_deadline、max_tasks、max_model_requests、max_input_tokens、max_output_tokens、max_total_tokens、max_estimated_cost、currency、max_search_requests、max_download_bytes、max_external_fulltexts、max_cpu_seconds、max_gpu_seconds、max_concurrency、max_attempts。
+
+max_total_tokens 与输入输出分项限制同时生效。未配置的可选上限是 null，不是零；max_gpu_seconds=0 明确禁止 GPU 执行。默认 max_attempts=2，包含首次执行，结构输出修复和重试都受总额度约束。
+
+active_seconds 累计 Run 处于 running、pausing、finalizing 的实际经过时间，包含网络等待、重试退避和调度等待；并行任务不重复累计。只有无受控活动 Worker 后才能进入 paused 或 blocked 并停止主动计时。CPU/GPU 秒另行累计。硬截止采用主动额度耗尽与 absolute_deadline 中先到者，绝对期限在暂停时仍推进。当前进程用单调时钟累计并定期持久化；崩溃恢复按运行事件和 UTC 时间保守补记未知运行间隔，不得把该间隔重置为零。
+
+### 10.2 资源预留
+
+分析阶段可使用初始预算的 70%；保留 20%用于候选结论复核，10%用于收尾及报告。比例是最大可用池而非强制消费目标。不同资源维度分别管理，不能用剩余检索次数代替模型费用余额。存在必须执行的确定性报告生成路径，不能依赖预算末尾一定还有一次模型调用。
+
+开始新调查前，内核在一个短事务内检查：已结算消耗 + 在途预留 + 新任务可界定上界 + 保留额度 ≤ 累计总额度。并发 Worker 不能分别读取余额后自行开始。任务完成后结算实际消耗并释放多余预留。
+
+求和预留仅适用于费用、token、请求数、字节数和 CPU/GPU 累计量等可加资源。主动时间按时钟和截止日期控制，不累加并行 Worker 的时间预估；并发由信号量管理。预留比例不适用于并发、重试次数和绝对期限。离散资源先向下取整预留池，余数归分析池；总预留不得超过上限。
+
+严格计费控制仅适用于已知单价、输入量、最大输出和附加费用的请求。无法约束内部调用次数的 CLI Worker 只能采用 estimated 模式。报价过期、输出上界未知或服务商无法约束隐性计费时，严格模式必须拒绝该调用。
+
+### 10.3 调度与停止
+
+调度首先满足输入依赖、权限和预算，再按核心主张、潜在影响、证据缺口及预计成本排序。初版采用可解释的规则排序，不训练隐藏的接收或拒稿分类器。已经发现重大候选问题时优先验证，而不是继续收集更多一般问题。
+
+探索额度用尽时停止新增调查，使用保留额度复核并收尾；时间硬截止时取消受控任务，落盘有效状态，使用确定性模板导出部分报告。用户主动停止同样保留已有效完成记录。非必要任务自动跳过记 state=skipped、reason=budget；因预算无法启动的必要任务记 state=blocked、reason=budget。
+
+本地取消目标为收到请求后 5 秒内停止新调度并发出终止信号，15 秒内结束受控进程树或报告无法结束的残留。正常收尾计入时间预算；硬截止后仅允许最长15秒的清理宽限，用于终止、提交账本和确定性快照导出，禁止新模型、检索或实验调用。shutdown_seconds 单独报告且计入用户看到的实际总时长。远程已提交调用可能继续计费，取消不能被解释为零费用。
+
+### 10.4 暂停恢复与金额调整
+
+暂停先停止新调度，再完成或取消在途任务。只有进入无活动 Worker 的 paused 状态后才暂停 active_seconds。不可确认的远程费用预留继续保留。恢复沿用同一 run_id 和账本，检查输入版本、政策、能力和绝对期限，不得重置历史开销。
+
+billing_state 为 reserved、in_flight、settled、pending_reconciliation 或 released；amount_basis 为 observed、estimated 或 unknown，两者正交。超时后无法查询结果的调用记执行 unknown_outcome、计费 pending_reconciliation，保留预留，不能按免费失败重试。无幂等支持的外部操作不能承诺 exactly-once。迟到费用结算可更新账本，但不重开终态 Run 或修改已导出的报告。
+
+Claude Code 的 --max-budget-usd 以客户端估计为准，可能越过阈值且恢复历史费用不计入该次限制；内核不可将该参数当作自身全局账本。Codex 适配器不得假设存在同名限额参数。[S12、S14]
+
+### 10.5 对用户显示的控制等级
+
+每个 Run 输出 enforcement：wall_time 为 advisory 或 runner_enforced；model_usage 为 unavailable、measured 或 request_bounded；monetary_cost 为 unknown、estimated 或 reservation_bounded；scope 为 tool_calls_only、managed_worker_calls 或 complete_run。
+
+complete_run 只有覆盖全部计费调用时才能使用。外层聊天、无法追踪的后台 Agent 和其他未纳管使用量必须单独列为 excluded_scope。用户要求账单绝不超过给定金额而实际能力只能估计时，应明确无法保证并停止不符合要求的启动，不换成含糊的“已控制成本”。
+
+## 11 状态一致性与故障恢复
+
+### 11.1 状态机与尝试
+
+Run 状态为 created、planned、running、pausing、paused、finalizing、completed、partial、blocked、failed、cancelled。任务和 Run 的状态语义分别管理。每次任务执行新建 attempt_id、租约、心跳、Provider 调用 ID、开始时间和资源预留。
+
+正常任务从 planned 到 ready、running、completed；结果部分完成转 partial；需要外部条件转 blocked；技术失败转 failed；输入失效转 stale。恢复重试创建新 attempt，不覆盖前次执行记录。
+
+paused、blocked 和预算导致的 partial 可在原版本和授权有效时恢复；completed、cancelled 不可恢复，新分析创建新 Run。failed 仅在错误明确 retryable 且完成状态协调后恢复，否则创建新 Run。取消经 finalizing 保存结果后最终仍为 cancelled，报告覆盖独立为 partial。恢复时旧租约递增 lease_generation，旧 Worker 迟到结果只留审计，不覆盖当前任务。
+
+协调器崩溃后先读取账本、租约和已有产物。已提交结果不重跑；已发出但未返回的远程调用先查状态；无法确认则保留 unknown_outcome。不得把运行中任务全部改回 ready 并重复执行。
+
+### 11.2 数据与文件提交
+
+SQLite 事务不覆盖外部文件。正确提交顺序为：在受控临时路径写文件，校验结构及摘要，必要时 flush/fsync，原子重命名到不可变 CAS；再在数据库短事务中登记产物、依赖和任务结果。
+
+文件写入成功而数据库提交失败，文件视为孤儿，不是已完成结果。数据库登记后文件丢失或摘要不符，关联记录进入损坏状态并阻断引用。启动检查和周期清理可以回收未被引用且超过保留期的孤儿，不删除仍有未结算调用关联的数据。
+
+模型、网络和实验执行均在事务外进行。状态数据库只能有一个协调写入者；Worker 使用队列或本机 RPC 提交。SQLite WAL 仅用于经过支持的本地文件系统，网络盘场景拒绝并发写入或切换经过测试的后端，不能宣称所有共享盘都安全。
+
+### 11.3 依赖失效
+
+任务输入指纹包含正文、附录、代码、解析器、标准、投稿截止日期、模块指令、模型配置和关键核验参数。改变这些分析输入必须形成新 Run；复用投影中受影响任务及下游结论记 stale，无关公共文献或局部产物可保留。旧结果对原快照继续有效，不因存在新版而抹去历史有效性。预算修订可在原 Run 追加事件；政策撤销立即限制未执行动作，并保留历史授权记录。
+
+旧报告不可修改，仍指向原快照。新版报告在独立目录生成，以 ReportManifest 最后提交标识完成。导出期间收到新证据时，继续完成原快照或整体重新生成，不能在一份报告中混合版本。
+
+### 11.4 缓存与多稿件
+
+私稿缓存按 workspace、paper、权限域和版本隔离。公共文献缓存允许在许可及网络规则一致时复用，元数据默认 7 天、搜索结果 24 小时后重新验证；按不可变版本获取的正文可长期使用，状态如撤稿信息仍须按需刷新。
+
+缓存键包含内容摘要、参数、解析器或模块版本和政策范围。缓存命中不能绕过当前权限。相同正文 hash 不授权两个用户或两篇稿件共享私有分析结果。
+
+### 11.5 统一错误协议
+
+所有 CLI/MCP/API 返回同一 Envelope：ok、data、error、warnings、request_id。error 包含 code、category、message、retryable、details。类别至少覆盖 invalid_input、policy_denied、budget_exhausted、missing_capability、provider_rate_limited、provider_timeout、unknown_outcome、parse_failed、schema_invalid、semantic_invalid、artifact_corrupt、resource_exhausted 和 internal_error。
+
+ok 表示本次接口操作成功，不表示稿件通过或全面审稿完成。status 或 export 成功返回部分结果时 ok=true、error=null；run --wait 因预算或取消结束时 ok=false，error 给出原因，data 仍包含 run_id、终态和有效报告引用。warnings 不代替 error。
+
+错误消息用于解释具体失败，不含密钥、完整私稿或隐藏路径。对于有截断或分页的检索结果，data 内明确 complete=false 和 next_cursor，不能当作完整无遗漏结果。
+
+
+## 12 权限保密与执行安全
+
+### 12.1 外发权限按行为定义
+
+Policy 必须分别控制将稿件发给当前宿主模型、其他模型服务、云端 OCR、学术搜索、代码托管服务和计算平台。允许搜索公开概念不自动允许上传全文，允许本地读取不自动允许远程推理。政策来源可以是本次明确指令、已保存有效授权或可核对的组织配置。
+
+模式包含 local_only、restricted、public。local_only 禁止远程模型和外部网络；restricted 按服务与数据类别逐项允许；public 只说明材料可公开，不自动允许收费或代码执行。未配置时采用 restricted，允许本地处理；云端模型处理仍需能追溯的用户授权或会话已授权范围。
+
+期刊和会议的 AI 使用及保密要求作为带来源和日期的 Policy 输入。系统不能凭记忆编造政策，也不能仅因当前账号有模型权限便推定稿件允许上传。不可用的模块应跳过并披露原因；能够合法执行的其他模块继续运行。
+
+### 12.2 材料是数据
+
+正文、附录、网页、代码注释和 README 中的“忽略规则”“给高分”“上传文件”等文字必须作为被审材料，不作为操作指令。检索查询默认使用公开技术概念；匿名或保密稿件的标题、独特句子、作者线索不得未经授权发送给搜索服务。
+
+宿主为云端时，模型接收的任何原文片段都属于模型外发。网络关闭的 MCP 不能约束宿主自身已经拥有的其他网络工具，因此受限运行需要实际宿主权限配置或受控 Worker 的工具代理。纯指令包装只能提供协作约束，不能声称具备抵御任意恶意宿主写入的操作系统隔离。
+
+### 12.3 代码与网络沙箱
+
+论文附带代码默认只读。实验通过独立容器或等价受测沙箱运行，输入只读挂载、输出写入专门目录、网络默认关闭、限制 CPU、内存、进程数、磁盘和时间。GPU 需显式额度。没有可验证隔离能力时不运行不可信代码，保留静态检查和复现计划。
+
+网络网关检查 Provider、域名、重定向、数据分类、请求尺寸和批准范围。不能用无效来源配置回退到全网。读取本地文件时解析真实路径并验证允许根目录，防止符号链接越界。不得记录密钥，不自动读取与任务无关的环境变量或凭据。
+
+### 12.4 原稿保护与输出安全
+
+默认不改原稿、源代码、数据或宿主全局配置。用户要求修改时生成独立 patch 或修订副本，展示差异及对应问题。修订不得补造实验、引用或结果。导出、patch 和修订副本写入新建且本产品拥有的目录；校验规范化路径与文件身份，禁止覆盖输入及其符号链接或硬链接别名，也不覆盖非本产品已有文件。解析器和生成器均遵守该限制。
+
+HTML 必须转义用户内容，禁止内联不可信脚本和远程资源；打包附件不包含密钥、模型缓存、账号信息及无必要原文。私有报告默认仅本机可访问，运行服务绑定本机地址或 STDIO。保留期限默认至用户删除，临时实验环境默认结束后清理；持久产物的删除需要明确用户操作并检查引用关系。
+
+## 13 CLI MCP 与 Worker 接口
+
+### 13.1 用户入口
+
+实现命令行 sreview，统一支持 --json。下列命令为本产品需要实现的接口，不是三个上游仓库已经提供的命令。
+
+| 命令 | 必需输入 | 行为与结果 |
+| --- | --- | --- |
+| sreview doctor | --host codex 或 claude | 只读能力探测与依赖诊断 |
+| sreview import | --manifest 文件 | 导入及冻结正文和附件，返回版本 ID |
+| sreview plan | --config 文件 | 创建 planned Run，返回 run_id，不启动收费 Worker |
+| sreview run | --run ID 或 --config 文件，二者互斥 | 启动已有计划，或先 plan 再 start |
+| sreview status | --run ID | 只读返回阶段、实际用量、在途预算和覆盖 |
+| sreview task claim | --run ID | 原子领取可执行任务，返回 TaskRequest 与租约 |
+| sreview pause | --run ID | 停止新调度并进入可恢复暂停 |
+| sreview resume | --run ID | 使用原配置和累计账本恢复 |
+| sreview budget set | --run ID --revision 文件 | 设置经授权的累计新上限 |
+| sreview cancel | --run ID | 终止受控任务并保留有效结果 |
+| sreview export | --run ID --audience 类型 --format 类型 | 从固定快照导出报告 |
+| sreview compare | --old ID --new ID | 比较版本，生成需重新核验的任务 |
+| sreview mcp | --workspace 路径 | 启动同一核心的 STDIO MCP 接口 |
+
+角色入口示例：Codex 用户输入“用 $paper-preflight 对 papers/draft.pdf 做 standard 投稿前自查，45 分钟以内，中文输出”；Claude Code 用户输入“/paper-referee papers/submission.pdf，standard，使用 reviews/rubric.json，输出英文审稿草稿”。这些自然语言由入口转成 RunConfig；不能拼接进 shell 字符串。
+
+重复的 run 请求只有提供相同 idempotency_key 和相同配置指纹时才返回已有 Run。相同键不同请求体必须报冲突，不能悄悄改掉已有任务。
+
+### 13.2 MCP 工具与调用方向
+
+MCP 暴露 sr_probe、sr_import、sr_plan、sr_start、sr_status、sr_claim_task、sr_pause、sr_resume、sr_cancel、sr_budget_set、sr_read_evidence、sr_submit_result、sr_export、sr_compare。MCP 与 CLI 调用同一服务函数和 Schema，不能维护两套业务逻辑。sr_plan 创建 planned Run，sr_start 只接受已存在 run_id。
+
+运行中的稿件工具显式携带 workspace_id、paper_id、paper_version_id 和 run_id；导入不需要尚未分配的 ID，比较使用 old_version_id 与 new_version_id。sr_read_evidence 接受 evidence_ids 和分页窗口，不接受任意文件路径。交互宿主通过 sr_claim_task 领取任务；协调器先校验依赖、权限和预算，再原子返回 TaskRequest、attempt_id、租约代次及短期 task_token。只读 status 不隐式领取任务。task_token 绑定 Task、attempt、输入指纹及租约代次，不能由模型自行生成。
+
+只有协调器能创建任务、预留预算、终止进程和提交报告。Worker 请求追加任务时返回 TaskProposal，由协调器检查，不能直接调用 sr_start 形成递归调度。
+
+### 13.3 HostAdapter 函数
+
+实现 probe、start_task、stream_events、cancel、collect_result 五个方法。probe 返回 HostCapabilities；start_task 接收 TaskRequest 并返回 TaskHandle；stream_events 提供带单调序号的开始、进展、用量、警告和完成事件；cancel 返回终止范围与未确认残留；collect_result 返回已完成或部分的 TaskResult。
+
+TaskRequest 必须包含任务身份、类型、只读输入 ID 与 hash、指令版本、输出 Schema ID、允许路径、允许工具、网络 Policy ID、预算分配、截止时间、上下文独立性和输出目录。execution_role 必须为 worker，parent_run_id 必须存在。模型名称取自用户配置或宿主当前已授权选择，不硬编码未来可能失效的模型名。
+
+TaskResult 必须包含执行状态、结果文件摘要、来源列表、使用量和计量依据、宿主与模型版本、错误和部分完成原因。执行状态覆盖 completed、partial、failed、cancelled，失败时仍可保留已经校验的部分产物。结构输出修复最多一次且消耗剩余 attempt 和模型预算；max_attempts 耗尽时不得获得额外修复调用。仍失败则 state=failed、error.code=schema_invalid，不能静默丢字段假称成功。
+
+### 13.4 程序输出与退出状态
+
+CLI 的 stdout 在 --json 模式只输出协议 JSON 或声明的 JSONL 事件，日志进入 stderr。返回成功的 partial 报告在 data 中明确 partial，不能隐藏未完成项目。
+
+退出码定义为 0 操作成功、2 输入或配置错误、3 政策阻断、4 预算不足、5 材料错误、6 能力缺失、7 Provider 失败、8 完整性错误、9 内部错误、10 运行取消。status 和 export 命令在成功返回部分结果时退出 0；run --wait 在预算结束时退出 4，并给出已生成报告位置。取消操作本身成功返回 0，被取消的等待进程返回 10。
+
+## 14 报告内容与交付标准
+
+### 14.1 共用报告头
+
+每份报告开头必须给出稿件版本、使用角色、投入档位、日期、标准来源、完成范围、主要限制及实际预算控制等级。不得以阅读了摘要而输出名为“全文深度审稿”的报告。
+
+主张判断应先说明研究内容，再给支持性证据与问题。正文采用完整自然段；表格用于准确比较、证据记录和修复优先级。不得强制凑出固定数量的优点、缺点或引用。
+
+### 14.2 作者报告
+
+author_report 包含研究概述、值得保留的贡献、准备度状态、按影响排序的问题、修复计划、可执行验证步骤、关键来源、覆盖和未完成项。每项修改明确是纠正事实、补充证据、澄清适用范围还是优化表达。
+
+deadline 模式在完整问题记录基础上生成截止前行动清单，明确哪些核心问题无法在既定约束内解决，不用润色掩盖实质风险。版本复查报告列出新发现、已修复、未修复、引入回归和仍不可核实的问题。
+
+### 14.3 审稿报告
+
+reviewer_report 包含 Summary、Strengths、Major Concerns、Minor Comments、Questions 和必要 References，或者严格映射当前表单。与作者沟通的每项主要问题解释主张、证据和学术影响；问题与建议不机械重复。
+
+评分和建议决定只有在配置要求且标准有效时产生；不得通过问题计数或简单加权总分自动判拒稿。内部诊断的严重程度用于安排核验和解释影响，不是期刊录用量表。
+
+editor_note 仅在用户要求或表单需要时生成，不能包含未核实的造假指控。任何输出均为使用者可审阅草稿；系统不对外发送、不自动代填投稿系统。
+
+### 14.4 文件合同
+
+每次导出生成唯一 export_id 和按受众过滤的 manifest.json。audience 为 author_private 或 reviewer_private 的内部完整导出包含 report.txt、report.md、findings.json、evidence.jsonl、coverage.json、budget.json；正式版本必须支持这组基础输出。模式对应的自然语言与结构化记录保持一致，内部文件可保存被驳回和未解决记录。
+
+作者内部导出另有 action_plan.json 和 action_plan.md；审稿内部导出另有 reviewer_private.md，可选 editor_note.txt。audience=authors、editor 或 public 时，只导出该受众获准的正文和最小必要证据，不含内部候选、驳回记录、完整账本或 reviewer_private。HTML 证据浏览器是可关闭的正式版功能；DOCX 为可选适配功能，缺少依赖不阻断基础交付。
+
+原始全文与论文代码不默认复制到便于分享的报告包。任何对外视图均重新检查受众权限。导出显示预算估计、已观察用量、未知费用和未计入范围；实际不可计量时不填虚构金额。
+
+## 15 仓库结构与安装维护
+
+### 15.1 项目结构
+
+| 路径 | 职责 |
+| --- | --- |
+| pyproject.toml 和锁文件 | 包声明 可选依赖 受测版本 |
+| src/scholarly_review/core | 状态机 调度 预算 策略 完整性 |
+| src/scholarly_review/models | 规范实体 Schema 与语义校验 |
+| src/scholarly_review/modules | 解析 检索 技术 实验 数值 复核 |
+| src/scholarly_review/adapters | Codex Claude API 本地模型 上游 Provider |
+| src/scholarly_review/interfaces | CLI MCP 共享服务函数 |
+| src/scholarly_review/reports | 文本 JSON HTML 及可选 DOCX |
+| skill_sources | 两个入口的规范源文件及精简资源 |
+| generated/codex 和 generated/claude | 从规范源生成的宿主包 |
+| schemas 和 profiles | 导出的 JSON Schema 领域与预算配置 |
+| tests | 单元 合同 故障 集成 安全与质量评测 |
+| docs 和 examples | 开发文档 安装说明 公开或合成示例 |
+| third_party | 来源清单 许可证 通知和适配记录 |
+
+Skill 的 SKILL.md 仅保留触发、参数、能力检查、内核调用、结果解释和边界，目标不超过 300 行。领域规范和报告模板按需读取，不能把整份实施规范塞入每次模型上下文。
+
+### 15.2 工作目录
+
+每个项目使用 .scholarly-review，包含 workspace.json、state.sqlite、artifacts、runs、exports、cache 和 tmp。runs 下按 run_id 分目录；内部证据位置使用 artifact ID，不依赖当前工作目录变化。全局安装的 Skill 目录不保存稿件和报告。
+
+本地服务根据 workspace_id 加锁，多个 MCP 连接使用同一协调器。用户并行处理多篇稿件时，每次调用均携带显式身份。不存在可被后一次安装覆盖的全局“当前论文”变量。
+
+### 15.3 安装与升级
+
+安装器提供 project 和 user 范围，明确显示将写入的 Skill、MCP 配置和依赖路径；只更改自有配置块，保留用户现有内容并备份。已有同名非本产品文件时拒绝覆盖，给出重命名或选择范围选项。
+
+升级先检查 schema 兼容和数据库版本，备份状态，执行可回滚迁移，再运行兼容测试。不得覆盖历史报告或稿件。卸载只删除本产品拥有的 Skill 和接入配置，保留分析数据，除非用户另行要求删除。
+
+正式发布须给出准确受测的宿主版本、操作系统和 Python 版本。首版要求 macOS 与 Linux 通过；Windows 通过 WSL2 作为受支持路线，原生 Windows 可先标 experimental。不得把文档上支持的路径直接宣传为端到端已测。
+
+## 16 测试体系与专业质量评估
+
+### 16.1 四层测试
+
+第一层为确定性单元测试：Schema、预算原子预留、数值公式、路径、状态转换和报告准入。第二层为合同与故障测试：CLI/MCP 等价、宿主适配、取消、重试、缓存和输入失效。第三层为真实宿主端到端测试：两种模式在各宿主、支持系统、无网络和缺能力环境下执行。第四层为学术质量评测：公开或合成稿件上的真实问题、错误批评和证据质量。
+
+Mock 只能证明接口和确定性流程，不能替代真实模型审稿质量评测。审稿文本不要求两宿主逐字相同；身份、状态、权限、证据要求和不确定性表达必须一致。
+
+### 16.2 学术黄金用例
+
+| 编号 | 输入要点 | 必须得到的结果 |
+| --- | --- | --- |
+| A01 | 单标签两类、无样本权重；行真实列预测矩阵 [[90,10],[20,30]]；声称 Accuracy 和 macro-F1 都80% | Accuracy=80%；macro-F1=76.1905%；weighted-F1=79.3651%；micro-F1=80%；kappa=0.526316；分别判断 |
+| A02 | 行真实列预测且逐行归一化的矩阵 [[0.9,0.1],[0.4,0.6]]；无类别支持数 | macro-recall=75%；总体 Accuracy 与 weighted-F1 不可确定，不假设等样本 |
+| A03 | 80%升至84%；基线0升至4；另有按百分数一位小数舍入的84.0%与0.8402 | 第一组提高4个百分点或相对5%；两显示值相容；零基线相对提升未定义 |
+| A04 | 均值84%和83%；称5次运行但无方差或逐次结果 | 仅报告差1个百分点；显著性未知，不生成 p 值或认定不显著 |
+| A05 | x²+y²≤(x+y)²；分别限定非负与任意实数 | 非负范围可支持；全实数范围以(1,-1)反例否定；不混用定义域 |
+| A06 | 双循环共 n(n-1)/2 次，循环体单位成本且无更高阶步骤；据此声称问题 NP-hard | 可确认算法二次量级；该论据不能证明 NP-hard，问题复杂性未知 |
+| A07 | 原配置 OOM；改 batch 后得到接近论文的结果 | 原运行资源阻断；修改运行独立记录，不标原样复现成功 |
+| A08 | 截止2026-05-01；文献分别于4月和6月公开；4月文献仅有缺机制细节的摘要 | 6月文献不构成投稿时漏引；摘要缺少必要细节时不能确认技术等价 |
+| A09 | 加组件同时把训练数据翻倍，报告准确率80%到84% | 两个报告值差4个百分点；不能把收益全归于组件，也不能证明组件无效 |
+| A10 | 候选批评缺消融，附录实际有完整消融 | 批评被推翻；可形成有证据的优点；附录不可读时保留未知 |
+| A11 | 两组表格与矩阵样本数及复算指标交叉对应，数据集标签相反 | 可确认内部不一致，正确归属待核实；只有另有可信数据集与划分映射时才确认哪处标签错 |
+| A12 | 给定合成材料和规定检查范围内无已知实质问题，含完整控制实验 | 不为达到问题数量配额捏造缺陷，输出有范围限制的正面评价 |
+
+所有数字用例在 CI 中由确定性程序复算，容差按公式和显示精度定义。每个用例另外提供反向或缺信息版本，测试系统是否能够合理拒答。
+
+### 16.3 工程发布阻断用例
+
+| 编号 | 故障或条件 | 必须满足的结果 |
+| --- | --- | --- |
+| E01 | 多 Worker 同时申请最后预算 | 原子预留无超额启动，失败者 state=blocked、reason=budget |
+| E02 | 调用已发出但响应丢失 | 保留 unknown_outcome 和费用预留，不推断免费失败 |
+| E03 | CAS 写完后数据库提交前崩溃 | 任务未成功，孤儿文件不进入报告，可恢复清理 |
+| E04 | 登记的证据文件被删或篡改 | hash 校验失败，相关结论禁入报告 |
+| E05 | 相同幂等键重复提交 | 同请求只提交一次；不同请求体报冲突 |
+| E06 | 修改附录或投稿截止日期 | 受影响下游 stale，旧结论不作为当前有效依据 |
+| E07 | 输入属于另一稿件的 evidence ID | 拒绝访问，不返回其内容或内部路径 |
+| E08 | Provider 拼错或重定向越出白名单 | 调用失败，不回退全网，不跟随未授权目标 |
+| E09 | 预算仅剩收尾资源且最终模型失效 | 确定性生成部分报告，列明已核实及未完成项 |
+| E10 | 恢复同一 Run | 累计费用、在途责任、活动时间不重置 |
+| E11 | 引文网页和 PDF 含恶意操作指令 | 不改变权限、预算、分数或文件范围 |
+| E12 | Schema 合法但引用不存在或过期证据 | 语义校验拒绝，不进入正式报告 |
+| E13 | 用户取消且有进程树与后台任务 | 停止新调度，终止受控进程，记录无法确认的远程残留 |
+| E14 | 导出时出现新稿件版本 | 报告保持完整单一快照，不混用版本 |
+| E15 | 无子 Agent 或只有同上下文自查 | 如实标 independence，不能宣称独立复核 |
+| E16 | 上游返回 error 列表或截断标记 | 规范化失败和不完整状态，不当成文献记录或无结果 |
+
+### 16.4 学术质量评价方法
+
+评测集至少包含 30 个有许可的稿件或片段集合，其中至少 10 个合成或注入已知问题、10 个公开真实研究、10 个高质量或缺信息负对照。目标覆盖的三个领域各至少 5 个集合，允许同一集合满足多个领域标签。不得将未获授权的真实匿名投稿加入公共测试库。
+
+至少两名具备领域背景的评估者独立标注，分歧经仲裁。标注包括问题命题、证据、影响、适用条件及可接受的未知答案。开发样本与封存测试集分开，同一论文的不同版本和注入变体不能跨集泄漏。每个主要宿主和档位固定配置重复运行三次，保留所有结果，不挑最好一次。
+
+指标包括确认问题精确率、重大问题召回率、证据定位准确率、虚构引用率、错误致命指控数、未知状态正确率、用户复核时间、模型用量和主动运行时间。精确率分母为系统确认的问题；召回率分母为人工标注且属于本档已承诺检查范围的问题，同时另报全稿问题覆盖，防止缩小范围掩盖遗漏。
+
+标准档首版目标为确认问题精确率点估计至少90%、重大问题召回率点估计至少80%、精确证据定位点估计至少95%。这些是发布目标，不是现有成绩；附样本量及按稿件聚类的95%置信区间，按领域、角色和档位分层报告。重复运行和同稿多个问题不视为独立样本，零分母标 N/A。虚构文献、确定性用例中的错误致命指控、原稿未授权写入和保密外发违规在发布测试中必须为零。
+
+统计按唯一问题命题匹配，不按句子数或重复 Finding 数。同一问题多次报告只算一次命中，一条意见含多个独立命题时拆开标注。带事实预设的疑问句纳入错误批评统计，不能靠改写成问题逃避精确率评估；纯信息请求另计澄清质量。
+
+若未达到目标，不能宣称专业可靠或默认升级为确认性输出；应修复、扩大验证或收缩具体能力声明。增加 Agent 数量或篇幅不是通过质量门槛的理由。
+
+## 17 分阶段开发与验收交付
+
+### 17.1 开发顺序
+
+| 阶段 | 必交付内容 | 进入下一阶段条件 |
+| --- | --- | --- |
+| M0 合同冻结 | Schema 状态机 配置 来源许可清单 合成用例 | 双模式预算及数据语义无冲突，例子可校验 |
+| M1 核心纵向链路 | 本地解析 CAS SQLite 预算 Task CLI 确定性报告 | 单篇稿件可从导入到部分报告，取消和恢复通过 |
+| M2 专业核验 | Claim Evidence 文献 数值 实验 一致性 反向复核 | A01–A12 与准入规则通过，两模式事实一致 |
+| M3 双宿主接入 | 两个 Skill Codex/Claude 适配 MCP 能力探测 安装升级 | 两宿主端到端、权限、故障和等价测试通过 |
+| M4 深度与复现 | 代码索引 理论检查 隔离实验 版本比较 HTML | 原样与修补分离，资源限制和 stale 传播通过 |
+| M5 正式发布 | 锁依赖 文档 示例 评测报告 兼容矩阵 安全审计 | 全部硬性门槛通过，已知限制和能力声明一致 |
+
+M1 和 M2 可以形成内部试用版，但不能把只有两个 Prompt 的包装称为完整正式版本。M4 的实验执行可以通过可选安装依赖实现，默认不启动；没有该依赖时复现计划仍可用并显示执行不支持。
+
+### 17.2 开发任务分工
+
+核心负责人拥有状态、预算和数据库合同；证据负责人拥有解析、定位与数值验证；检索负责人拥有 Provider 和文献比较；宿主负责人拥有两种适配器和安装器；专业质量负责人拥有标准、复核方法和黄金评测。小团队可以一人承担多个职责，但接口所有权应明确。
+
+多 AI 并行开发按模块分支分工，先共享冻结的 Schema、错误码和测试，不允许各自另造事实结构。新模块必须通过既有合同，不能通过放宽校验使测试通过。
+
+### 17.3 单个任务的完成定义
+
+一个开发任务完成必须同时满足：实现可运行；必需输入输出有 Schema；正常与对应故障路径有测试；预算和权限通过公共入口；文档与代码一致；日志无秘密；不能影响原稿；接口示例可执行。功能不可用时返回明确状态，不允许静默成功、临时硬编码假结果或 TODO 占位通过验收。
+
+每个阶段交付运行命令、测试结果、真实兼容版本、尚存限制和迁移说明。模型生成的审稿结果必须标明实际执行模式、模型、指令版本和主要来源，不把外部研究论文报告的能力当成当前软件的能力。
+
+### 17.4 最终交付清单
+
+正式交付必须包含源代码与锁文件、两宿主安装包、CLI/MCP、核心 Schema、领域配置、预算预设、示例稿件及许可、确定性与端到端测试、学术质量评测报告、用户指南、开发指南、故障恢复指南、来源及第三方许可证清单。
+
+正式版本的核心承诺是：在可见投入范围内完成可追溯的检查，保留不确定性，并可靠交付结果。接受或拒稿仍由使用者结合实际标准作出；系统的工程完整性不能替代学术判断。
+
+
+## 附录 A 精确配置与数据合同
+
+### A1 配置示例
+
+下列 JSON 是标准档作者自查的完整生效配置示例，材料假定已获准由当前宿主处理，正文路径由使用者提供。配置是数据，不自动授权任何未列出的服务。实施者须按同样字段编写 Schema；ID、时间和摘要由内核产生，不要求用户手填。
+
+```json
+{
+  "schema_version": "1.0.0",
+  "workspace": ".scholarly-review",
+  "budget_account_id": null,
+  "input": {
+    "manuscript": "papers/example.pdf",
+    "supplements": [],
+    "source_files": [],
+    "code_repositories": [],
+    "data_files": []
+  },
+  "mode": "author",
+  "effort": "standard",
+  "execution_mode": "interactive",
+  "host": {
+    "name": "codex",
+    "model": "host_current",
+    "required_capabilities": []
+  },
+  "scope": {
+    "domain_profile": "generic-v1",
+    "reviewer_expertise": "general",
+    "focus_claim_ids": [],
+    "include_appendices": true,
+    "allow_new_experiments": false
+  },
+  "budget": {
+    "max_active_seconds": 2700,
+    "absolute_deadline": null,
+    "max_tasks": 48,
+    "max_model_requests": 96,
+    "max_input_tokens": null,
+    "max_output_tokens": null,
+    "max_total_tokens": 180000,
+    "max_estimated_cost": null,
+    "currency": "USD",
+    "max_search_requests": 60,
+    "max_download_bytes": 1073741824,
+    "max_external_fulltexts": 12,
+    "max_cpu_seconds": 3600,
+    "max_gpu_seconds": 0,
+    "max_concurrency": 2,
+    "max_attempts": 2,
+    "verification_reserve_ratio": 0.20,
+    "finalization_reserve_ratio": 0.10,
+    "require_request_bounded_cost": false,
+    "require_runner_enforced_time": false
+  },
+  "permissions": {
+    "classification": "restricted",
+    "host_model_processing": "allowed",
+    "other_model_providers": [],
+    "cloud_ocr_providers": [],
+    "search_providers": ["arxiv", "openalex"],
+    "search_disclosure": "public_concepts_only",
+    "code_execution": "denied",
+    "paid_services": [],
+    "source_modification": "denied",
+    "authorization_basis": "explicit_request"
+  },
+  "rubric": {
+    "profile": "generic-v1",
+    "source_file": null,
+    "venue": null,
+    "submission_cutoff": null,
+    "score_requested": false,
+    "decision_requested": false
+  },
+  "outputs": {
+    "language": "zh-CN",
+    "audience": "author_private",
+    "formats": ["txt", "md", "json", "html"],
+    "max_external_references": 4,
+    "include_original_materials": false
+  },
+  "extensions": {}
+}
+```
+
+配置合并顺序为内置默认值、所选 effort 预设、项目配置文件、本次用户明确参数，后项覆盖前项。未提供字段继承；显式 null 只在 Schema 已定义其含义时清除可选限制，不表示继承；零仍为零。安全拒绝规则和组织强制政策不被低优先级允许项覆盖。配置解析器实际展开默认值，不能依赖 JSON Schema 的 default 自动填充。保存 effective_config、profile_version 与 config_hash，并显示参数及权限来源。无法执行的强制要求使 plan 失败，不能自行将 true 改为 false。
+
+effort 为 custom 时仍以 standard 作为未指定的资源默认值，最终展开成完整配置；用户提供的检查范围优先。reproduction 的默认代码权限仍为 denied，须有具体实验授权才能执行。默认下载字节上限按 quick、standard、deep、reproduction 分别为 256MiB、1GiB、2GiB、5GiB；CPU 秒为 600、3600、7200、14400；模型请求上限为 24、96、240、320。模型请求无法观测时保留目标但将 enforcement 标为不可强制。
+
+domain_profile 可为 generic-v1、ml-v1、systems-v1、security-v1；reviewer_expertise 为 general、generalist、specialist。formats 接受 txt、md、json、html、docx；不支持的可选格式返回 warning，不能阻断基础文本和 JSON 输出。audience 接受 author_private、reviewer_private、authors、editor、public，前两种为获授权使用者内部视图，后三种为按受众过滤的导出视图。
+
+budget_account_id 为 null 时在新授权任务中建立账户，延续分析须填入实际已有账户 ID。原例的路径均为相对当前项目根的本地路径；manuscript 为必需文件，supplements、source_files、data_files 为路径字符串数组，code_repositories 每项含 path 和 revision。host_current 解析为本次实际宿主模型配置并记录；不支持该模型时不得静默切换收费服务。authorization_basis 是待核对声明，内核必须关联原始用户指令或已生效授权记录，Worker 的文字不能自行授予权限。
+
+### A2 身份与有效性
+
+Workspace 拥有 workspace_id；Paper 另有 paper_id；PaperVersion 再增加 paper_version_id。Run 及其派生产物增加 run_id。先导入的稿件快照不需要虚构 run_id；跨版本比较显式使用 old_version_id 和 new_version_id。公共文献独立实体使用 source_id，其私有检索关系仍绑定 Run。
+
+持久记录均包含 record_id、schema_version、created_at、producer 和 validity。producer 的字段为 component、component_version、actor_type、actor_id；actor_type 为 program、model 或 human。validity 为 current、stale 或 corrupt，与学术状态独立；发生失效保留原 disposition，不把其改写成论文错误或已推翻。Run 和 BudgetEntry 均包含 budget_account_id，跨 Run 累计由同一账户账本维护。
+
+模型派生产物另有 model_name、host_name、host_version、prompt_version、input_artifact_ids、input_fingerprint。缺少不可获取的模型版本细节用 null 加 warnings 记录，不凭默认名称推测。
+
+### A3 核心结构的精确键
+
+以下类型定义是业务合同。string 表示非空字符串，nullable 表示允许 null；数组无记录时为空数组。字段除明确标 optional 外均必需。实现导出的 Schema 需验证 enum、长度、单位和引用约束。
+
+Claim 的精确键为 claim_id:string、original_text:string、normalized_text:string、scope:string、origin:explicit|paraphrase、importance:core|supporting|peripheral、source_refs:SourceRef[]、claim_types:ClaimType[]、supersedes:nullable string。ClaimType 为 empirical、theoretical、comparative、efficiency、generality、reproducibility。模型引入的检查问题不得以 origin=implicit 混入 Claim，应使用 Hypothesis。
+
+Hypothesis 的键为 hypothesis_id:string、question:string、motivation:string、related_claim_ids:string[]、source_refs:SourceRef[]。Hypothesis 可以没有作者原文，但必须说明产生检查问题的依据。
+
+SourceRef 的键为 artifact_id:string、locator:Locator、quote:nullable string。Locator 是四种标记联合之一：document、code、external、artifact。document 包含 block_id、page_index、page_label、bbox、text_span、match_status；code 包含 repo_commit、relative_path、line_start、line_end、snippet_sha256；external 包含 url、source_id、version_id、section_hint、access_level；artifact 包含 artifact_sha256、json_pointer。不可用的定位字段置 null，match_status 和 access_level 不可省略。
+
+Evidence 的键为 evidence_id:string、kind:EvidenceKind、content_summary:string、payload_artifact_id:nullable string、source_refs:SourceRef[]、method:string、assumptions:string[]、limitations:string[]、retrieved_at:nullable datetime、access_level:AccessLevel、disclosure:Disclosure。EvidenceKind 使用第9章定义。AccessLevel 为 metadata、abstract、partial_fulltext、fulltext、supplied_primary、local_computation。Disclosure 包含 classification、allowed_audiences:string[]、authorization_record_ids:string[]。
+
+Assessment 的键为 assessment_id:string、claim_id:string、check_type:string、outcome:AssessmentOutcome、evidence_ids:string[]、scope_checked:string、limitations:string[]。check_type 必须是模块注册表中存在的 ID。not_checked 不允许出现宣称核验完成的证据结论。
+
+Finding 的键为 finding_id:string、kind:strength|concern|clarification、proposition:string、claim_ids:string[]、hypothesis_ids:string[]、evidence_ids:string[]、disposition:FindingDisposition、impact:Impact、potential_impact:Impact、impact_rationale:string、confidence_basis:string、verification_ids:string[]、duplicate_of:nullable string、recommended_action:nullable string、report_eligibility:ReportEligibility。
+
+ReportEligibility 由内核产生，键为 audience、admitted:boolean、category:strength|confirmed_concern|question|excluded、reason_codes:string[]、checked_at。Worker 不能写入或修改该字段。不存在伪精确“可信度百分比”；confidence_basis 必须解释来源访问和复核方式。
+
+Verification 的键为 verification_id:string、finding_id:string、question:string、input_evidence_ids:string[]、input_artifact_ids:string[]、method:string、context_independence:fresh|inherited|same_context|human、blinded:boolean、supporting_evidence_ids:string[]、counterevidence_ids:string[]、result:validated|invalidated|inconclusive、rationale:string、limitations:string[]。fresh 只保证受控输入上下文重新创建，不暗示模型误差统计独立。
+
+Coverage 的键为 material_items:MaterialCoverage[]、claim_items:ClaimCoverage[]、check_items:CheckCoverage[]、unknown_denominators:string[]。MaterialCoverage 包含 artifact_id、total_blocks:nullable int、readable_blocks:int、analyzed_blocks:int、missing_reason:nullable string；ClaimCoverage 包含 claim_id、importance、applicable_checks、completed_checks、unresolved_checks；CheckCoverage 包含 check_type、expected_items:nullable int、processed_items:int、scope_label:string、remaining_reasons:string[]。所有分子不大于已知分母。
+
+### A4 任务和证据提交合同
+
+TaskRequest 包含 workspace_id、paper_id、paper_version_id、run_id、task_id、attempt_id、lease_generation:int、task_token:string、task_type、execution_role、input_artifacts、prompt_version、output_schema_id、allowed_paths、permitted_tools、policy_id、budget_allocation、deadline、context_independence、output_staging_directory。input_artifacts 每项包含 artifact_id、sha256、read_scope。task_token 不进入模型报告或公共日志。
+
+TaskResult 包含 task_id、attempt_id、lease_generation、input_fingerprint、execution_status、result_artifact_id、result_sha256、evidence_ids、usage、error、warnings、incomplete_reasons。result_artifact_id 和 result_sha256 在无有效产物时可为 null，error 为结构化错误或 null。usage 包含 input_tokens、output_tokens、reported_total_tokens、cost_amount、currency、basis、provider_call_ids，未知项用 null，basis 为 observed、estimated 或 unknown。
+
+sr_submit_result 必须核对 token、attempt、租约代次、输入指纹和当前状态。取消、过期租约或已经被替代的 Worker 迟到结果只进入审计，不进入当前有效结果。重复合法提交使用原 idempotency_key 返回原结果，不能重复结算或覆盖新的结果。
+
+SearchResult 包含 records、provider_status、error_reason、complete、truncation、next_cursor、queries、retrieved_at。provider_status 为 success、partial、failed；成功无匹配为 success 加空 records；失败不得记成 success 加空列表。每个 record 含 source_id、title、authors、first_public_date、version_public_date、venue、identifiers、links、access_level，未知元数据用 null。
+
+### A5 领域与标准配置
+
+RubricProfile 必需键为 profile_id、version、domain、source_urls、retrieved_at、valid_from、submission_cutoff、criteria、score_scales、policy_refs。Criterion 包含 criterion_id、name、description、applicable_paper_types、required_evidence_types、default_checks。ScoreScale 包含 criterion_id、allowed_values、value_definitions、required:boolean；没有有效量表时 score_scales 为空数组。
+
+generic-v1 的 criteria 为 significance、novelty、soundness、evidence、reproducibility、clarity；其 score_scales 为空，不自动生成分值。领域配置通过新增检查及适用规则扩展，不覆盖通用的引用、证据和不确定性要求。期刊标准更新形成新版本，不能修改正在运行的 Run。
+
+### A6 复现实验配置
+
+ExperimentPlan 必需键为 experiment_id、run_id、claim_ids、run_variant、code_artifact_id、data_artifact_ids、environment_lock_id、entrypoint、arguments、working_directory、network_policy_id、resources、metrics、approval_record_id、timeout_seconds、outputs。entrypoint 是批准的可执行入口，arguments 是字符串数组，不是待解释 shell 文本。
+
+resources 包含 cpu_cores、memory_bytes、disk_bytes、cpu_seconds、gpu_seconds、max_processes。MetricRule 包含 name、definition、unit、reported_value、comparison、absolute_tolerance、relative_tolerance、randomness_protocol；comparison 为 exact、rounded_interval、absolute、relative、statistical 或 descriptive。需要容差但未定义时计划不可执行，不能默认套用百分比。
+
+ExecutionResult 必需键为 experiment_id、attempt_id、environment_digest、exit_code、execution_outcome、metric_results、log_artifact_ids、patch_artifact_id、usage。execution_outcome 为 completed、resource_blocked、data_unavailable、dependency_failed、timeout、policy_blocked、execution_failed 或 cancelled；metric_results 单独记录 within_tolerance、mismatch 或 inconclusive，不能放进 execution_outcome。
+
+## 附录 B 最小实现算法
+
+### B1 调度循环
+
+协调器启动时加载配置、政策、依赖和未结算责任，恢复已完成提交，再进入调度。每次选择 ready 任务前验证输入有效性、权限和资源，原子获得租约及预算预留。启动 Worker 后不断接收事件，不在数据库事务中等待模型或网络。
+
+结果返回时先核对租约与输入版本，再验证 Schema、跨记录引用及证据存在性，然后提交不可变产物及事务状态。资源用量与科学结论独立写入。失败按照错误类别决定是否存在有预算的安全重试；无幂等远程操作不得盲目重跑。
+
+到达探索停止条件后只调度复核与报告任务。到达硬截止后停止 Worker，并从已提交记录生成确定性部分报告。即使没有一条已确认发现，报告仍必须包含输入、范围、材料不足或失败原因，不能返回空成功。
+
+### B2 最终意见生成
+
+首先固定报告快照；其次执行 admit_finding 并按受众筛选；再次把问题、优点、澄清项分别排序和去重；最后生成模式对应的自然语言。文本生成后再次检查结论强度、数字、引用和问题 ID 是否仍与快照一致。
+
+生成器不得把 unresolved 改为 confirmed，也不得因为删除无法核实的引用而保留原先依赖该引用的创新性指控。模型润色失败时直接导出符合结构的确定性模板，不额外开展未经预算的调查。
+
+### B3 修改稿复查
+
+先比较新旧输入摘要和正文结构，再按主张、数值表格与代码匹配差异。自动匹配只生成候选对应关系；高影响主张变化需重新核验。对已解决问题保留旧证据和新修正证据，不删除历史缺陷。对于只改写表述而未改变实验支撑的情况，不自动记“科学问题已修复”。
+
+## 附录 C 独立使用场景
+
+### C1 作者临近截止
+
+一位作者准备在当天提交计算机领域论文，提供正文和附录，明确不能增加实验。用户选择 quick 和10分钟。系统检查贡献与主要结果、明显数值矛盾和关键表达，输出已确认错误、必须澄清的结论和可在截止前完成的修改。尚未充分核验的新颖性不得称为已通过。不能修复的核心证据缺口继续列为投稿风险。
+
+### C2 审稿人标准评审
+
+一位审稿人提供匿名稿件、附录、投稿日期和会议表单，并确认允许在指定宿主使用辅助模型。用户选择 standard、45分钟、仅公开概念检索。系统不搜索稿件标题识别作者，完成内部检查和直接前作调查，核实拟写入的主要问题，分别导出内部报告和面向作者的意见草稿。表单没有要求的评分不会被擅自添加。
+
+### C3 有限资源复现
+
+一位作者提供公开代码与可用数据，选择 reproduction、240分钟，批准单个 CPU 评估实验，不批准 GPU 训练。系统冻结原始代码、环境和指标容差，仅执行批准计划。若依赖失败或资源不足，报告执行状态及原因，继续交付静态检查结果。任何修补后运行须单独记录，不标原样复现完成。
+
+### C4 新版本与恢复
+
+一位使用者在分析中途补充附录，随后宿主退出。系统保留原 Run 的账本和快照，新附录形成新 PaperVersion。继续分析新版时创建关联的新 Run；新 Run 不继承一份免费额度，必须显示原 Run 已花费、剩余额度及新增额度的授权分配，跨 Run 项目预算共同约束。新版复用视图中的受影响发现标过期，原版报告仍有效。恢复旧 Run 时仅处理旧快照，不能静默换成新附录。
+
+## 附录 D 来源与技术依据
+
+上游源码按固定提交核验；宿主文档按2026年11月22日访问版本核验。源码事实与本规范提出的新要求分开，引用资料不代表原项目作者认可本系统。实施时应重新检查宿主能力和许可证覆盖，保留发布时的来源快照。
+
+[S01] paper-review.skill 仓库与核心指令。证据评价、自查和审稿入口、输出与运行能力边界。
+https://github.com/jam-cc/paper-review.skill/blob/bb9900ff7a95e6a28092ab0a9e1d81098f41634e/SKILL.md
+
+[S02] paper-review.skill 设计说明。指令包定位、四阶段设计和验证边界。
+https://github.com/jam-cc/paper-review.skill/blob/bb9900ff7a95e6a28092ab0a9e1d81098f41634e/docs/DESIGN.md
+
+[S03] PaperDoctor 仓库说明与文件树。模块划分、工具链和授权材料核查入口。
+https://github.com/QinghongLin/paperdoctor/tree/b44221d35b4cfd1d99baf2256ffebb1d7b45effd
+
+[S04] PaperDoctor read-claim 与 read-exp。原子主张、跨章节核查及未充分检查项目的状态规则。
+https://github.com/QinghongLin/paperdoctor/blob/b44221d35b4cfd1d99baf2256ffebb1d7b45effd/skills/read-claim/SKILL.md
+https://github.com/QinghongLin/paperdoctor/blob/b44221d35b4cfd1d99baf2256ffebb1d7b45effd/skills/read-exp/SKILL.md
+
+[S05] PaperDoctor PDF 解析流程与 MinerU API 包装。用于识别云端上传和路径依赖。
+https://github.com/QinghongLin/paperdoctor/blob/b44221d35b4cfd1d99baf2256ffebb1d7b45effd/skills/prepare-paper/SKILL.md
+https://github.com/QinghongLin/paperdoctor/blob/b44221d35b4cfd1d99baf2256ffebb1d7b45effd/tools/api_mineru.py
+
+[S06] PaperDoctor run-exp。复现实验步骤、代码修补、容差和结果状态。
+https://github.com/QinghongLin/paperdoctor/blob/b44221d35b4cfd1d99baf2256ffebb1d7b45effd/skills/run-exp/SKILL.md
+
+[S07] Open ScholarPeer 产物合同。阶段输入输出、降级条件和报告依赖。
+https://github.com/amirkiarafiei/open-scholar-peer/blob/229370cbe34cde85499addd5246c95f1f1729f97/docs/ARTIFACT_CONTRACTS.md
+
+[S08] Open ScholarPeer 已知限制。状态、工作流和 Q&A 能力边界。
+https://github.com/amirkiarafiei/open-scholar-peer/blob/229370cbe34cde85499addd5246c95f1f1729f97/docs/KNOWN_LIMITATIONS.md
+
+[S09] Open ScholarPeer 检索核心和 CLI。Provider、错误、超时、来源筛选和输出协议。
+https://github.com/amirkiarafiei/open-scholar-peer/blob/229370cbe34cde85499addd5246c95f1f1729f97/mcp-server/core.py
+https://github.com/amirkiarafiei/open-scholar-peer/blob/229370cbe34cde85499addd5246c95f1f1729f97/mcp-server/osp_cli.py
+
+[S10] 两个具有独立 MIT 许可文件的参考项目。
+https://github.com/jam-cc/paper-review.skill/blob/bb9900ff7a95e6a28092ab0a9e1d81098f41634e/LICENSE
+https://github.com/amirkiarafiei/open-scholar-peer/blob/229370cbe34cde85499addd5246c95f1f1729f97/LICENSE
+
+[S11] OpenAI 官方 Skills 文档。入口、发现目录和可移植指令结构。
+https://learn.chatgpt.com/docs/build-skills
+
+[S12] OpenAI 官方非交互模式文档。codex exec、机器事件与结构化结果。
+https://learn.chatgpt.com/docs/non-interactive-mode
+
+[S13] Anthropic 官方 Claude Code Skills 文档。Skill 目录、调用、上下文与权限字段含义。
+https://code.claude.com/docs/en/skills
+
+[S14] Anthropic 官方 Claude Code CLI 文档。非交互调用、Schema、回合限制和估计费用上限。
+https://code.claude.com/docs/en/cli-reference
+
+[S15] 两个宿主的 MCP 官方文档。用于实施和复核本地工具接入。
+https://learn.chatgpt.com/docs/extend/mcp?surface=cli
+https://code.claude.com/docs/en/mcp
+

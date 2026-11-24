@@ -1,0 +1,66 @@
+{
+  "profile_id": "systems-v1",
+  "version": "1.0.0",
+  "domain": "networking_distributed_systems",
+  "extends": "generic-v1",
+  "source_urls": [],
+  "retrieved_at": null,
+  "valid_from": "2026-11-22",
+  "submission_cutoff": null,
+  "policy_refs": [],
+  "score_scales": [],
+  "venue_note": "Venue criteria (OSDI, SOSP, NSDI, SIGCOMM, EuroSys, ...) must be supplied via rubric.source_file.",
+  "criteria": [
+    {"criterion_id": "sys_model_fidelity", "name": "Model fidelity", "description": "The formal/problem model matches the implemented system and its decisions.", "applicable_paper_types": ["systems", "mixed", "theory"], "required_evidence_types": ["manuscript", "code"], "default_checks": ["systems.model_decision_consistency", "systems.resource_feasibility"]},
+    {"criterion_id": "sys_evaluation", "name": "Evaluation realism", "description": "Workloads, testbeds and baselines reflect the claimed deployment setting.", "applicable_paper_types": ["systems", "mixed"], "required_evidence_types": ["manuscript"], "default_checks": ["systems.workload_testbed", "systems.baseline_configuration", "systems.overhead_tail"]}
+  ],
+  "checks": [
+    {
+      "check_type": "systems.model_decision_consistency", "module": "technical", "priority": 1,
+      "name": "Model vs. executable decisions", "name_zh": "问题模型与可执行决策一致",
+      "applicable_paper_types": ["systems", "mixed", "theory"],
+      "questions": [
+        "Can the decisions in the formulation actually be executed by the system (information available at decision time, control knobs that exist)?",
+        "Is the temporal order of observation, decision and effect consistent (no use of future information)?"
+      ],
+      "evidence_needed": ["formulation quote", "system design quote"],
+      "must_not": []
+    },
+    {
+      "check_type": "systems.resource_feasibility", "module": "technical", "priority": 1,
+      "name": "Resource conservation and feasibility", "name_zh": "资源守恒与约束可行性",
+      "applicable_paper_types": ["systems", "mixed", "theory"],
+      "questions": [
+        "Do capacity, bandwidth, energy or queue constraints conserve resources? Can the constraint set be infeasible for stated parameters?",
+        "Is complexity expressed in the true input size (e.g. numbers encoded in binary, number of flows/nodes)?"
+      ],
+      "evidence_needed": ["constraint quotes", "a deterministic calculation where possible"],
+      "must_not": ["Non-convexity or integer variables alone do not prove NP-hardness."]
+    },
+    {
+      "check_type": "systems.workload_testbed", "module": "experiment", "priority": 1,
+      "name": "Workload and testbed realism", "name_zh": "负载与测试平台真实性",
+      "applicable_paper_types": ["systems", "mixed"],
+      "questions": ["Are workloads/traces, scale, hardware and network conditions representative of the claimed setting? Are simulation-only results generalised to deployment?"],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    },
+    {
+      "check_type": "systems.baseline_configuration", "module": "experiment", "priority": 2,
+      "name": "Baseline configuration", "name_zh": "基线配置",
+      "applicable_paper_types": ["systems", "mixed"],
+      "questions": ["Are baseline systems configured and tuned reasonably (versions, parameters, same hardware)?"],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    },
+    {
+      "check_type": "systems.overhead_tail", "module": "experiment", "priority": 2,
+      "name": "Overheads and tail behaviour", "name_zh": "开销与尾延迟",
+      "applicable_paper_types": ["systems", "mixed"],
+      "questions": ["Are overheads (CPU, memory, control traffic), tail latency (p99/p999), failure and recovery behaviour measured, not only averages?"],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    }
+  ],
+  "subfield_checks": []
+}

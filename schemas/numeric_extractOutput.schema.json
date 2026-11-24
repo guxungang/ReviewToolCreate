@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "NumericCheckSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "confusion_metrics",
+            "normalized_confusion",
+            "change",
+            "mean",
+            "sum",
+            "weighted_mean",
+            "rounding_compatible",
+            "mean_difference",
+            "product",
+            "ratio"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": true,
+          "title": "Inputs",
+          "type": "object"
+        },
+        "claimed": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Claimed",
+          "type": "object"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/QuoteRef"
+          },
+          "minItems": 1,
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "op",
+        "inputs",
+        "source_refs",
+        "description"
+      ],
+      "title": "NumericCheckSpec",
+      "type": "object"
+    },
+    "QuoteRef": {
+      "additionalProperties": false,
+      "description": "A verbatim quote from one DocumentMap block; the kernel resolves match_status.",
+      "properties": {
+        "block_id": {
+          "title": "Block Id",
+          "type": "string"
+        },
+        "quote": {
+          "minLength": 3,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "quote"
+      ],
+      "title": "QuoteRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/NumericCheckSpec"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "analyzed_block_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Analyzed Block Ids",
+      "type": "array"
+    },
+    "not_extractable": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Extractable",
+      "type": "array"
+    }
+  },
+  "required": [
+    "checks",
+    "analyzed_block_ids"
+  ],
+  "title": "NumericExtractOutput",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,176 @@
+{
+  "profile_id": "ml-v1",
+  "version": "1.0.0",
+  "domain": "machine_learning_ai",
+  "extends": "generic-v1",
+  "source_urls": [],
+  "retrieved_at": null,
+  "valid_from": "2026-11-22",
+  "submission_cutoff": null,
+  "policy_refs": [],
+  "score_scales": [],
+  "venue_note": "Venue-specific criteria, score scales and AI-use policies (NeurIPS, ICML, ICLR, ACL, CVPR, AAAI, ...) are NOT built in. Supply the current call/review form via rubric.source_file; the system never fills scales from model memory.",
+  "criteria": [
+    {"criterion_id": "ml_evaluation_rigor", "name": "Evaluation rigour", "description": "Benchmarks, splits, metrics, baselines and statistics allow the stated empirical conclusions.", "applicable_paper_types": ["empirical", "mixed"], "required_evidence_types": ["manuscript", "calculation"], "default_checks": ["ml.eval_protocol", "ml.baseline_fairness", "ml.statistical_rigor"]},
+    {"criterion_id": "ml_attribution", "name": "Attribution of gains", "description": "Improvements are attributed to the components that cause them.", "applicable_paper_types": ["empirical", "mixed"], "required_evidence_types": ["manuscript"], "default_checks": ["ml.ablation_attribution"]},
+    {"criterion_id": "ml_responsible", "name": "Limitations and responsible research", "description": "Limitations, licences, societal impact and compute are reported honestly.", "applicable_paper_types": ["empirical", "systems", "theory", "mixed"], "required_evidence_types": ["manuscript"], "default_checks": ["ml.ethics_limitations", "ml.reproducibility_compute"]}
+  ],
+  "checks": [
+    {
+      "check_type": "ml.eval_protocol", "module": "experiment", "priority": 1,
+      "name": "Evaluation protocol", "name_zh": "评测协议",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "Are train/validation/test splits standard or fully described? Was the test set used for model selection, early stopping, prompt selection or hyper-parameter tuning?",
+        "Are metrics defined precisely (averaging: macro/micro/weighted; top-k; normalisation; which split; which checkpoint)?",
+        "Are all compared methods evaluated under the same protocol (same split, same preprocessing, same metric implementation)?",
+        "Does the benchmark actually measure the capability claimed (construct validity)?"
+      ],
+      "evidence_needed": ["setup quote", "result table caption/row quote"],
+      "must_not": ["Do not assume test-set tuning without textual evidence; if unclear, raise a clarification question."]
+    },
+    {
+      "check_type": "ml.baseline_fairness", "module": "experiment", "priority": 1,
+      "name": "Baseline fairness", "name_zh": "基线公平性",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "Are the strongest and most recent relevant baselines included, including simple/strong baselines (e.g. tuned linear probe, kNN, larger plain model, well-prompted LLM)?",
+        "Do baselines get comparable tuning budget, data, pre-training, model size and compute? Are baseline numbers re-run or copied from papers with different settings?",
+        "For copied numbers: do task, dataset version, split, input information, supervision, resources and metric definition match?"
+      ],
+      "evidence_needed": ["quotes describing baseline sources and tuning", "comparison-table quotes"],
+      "must_not": ["Copying public baseline numbers is not misconduct; state the comparability limitation instead.", "Incomparable numbers are background, not proof the method is worse."]
+    },
+    {
+      "check_type": "ml.ablation_attribution", "module": "experiment", "priority": 1,
+      "name": "Ablation and attribution", "name_zh": "消融与收益归因",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "When the proposed method also changes data size, training budget, teacher model, pre-training data or tuning effort, is the gain isolated for the new component?",
+        "Does each claimed component have an ablation under otherwise identical settings (check the appendix before concluding it is missing)?"
+      ],
+      "evidence_needed": ["quotes of what changed between conditions", "ablation table quote or the place it should be"],
+      "must_not": ["Confounded comparisons support 'attribution not isolated', never 'the component is ineffective'."]
+    },
+    {
+      "check_type": "ml.statistical_rigor", "module": "experiment", "priority": 2,
+      "name": "Statistical evidence", "name_zh": "统计证据",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "How many seeds/runs? Are variance, standard error or confidence intervals reported, and over what (seeds, data splits, prompts)?",
+        "Are small differences (e.g. < 1 point) presented as improvements without uncertainty?",
+        "Are multiple-comparison or cherry-picking risks (best of many runs/prompts/checkpoints) addressed?"
+      ],
+      "evidence_needed": ["quotes of run counts and reported spread"],
+      "must_not": ["Never compute p-values or CIs without the necessary data.", "'Evidence insufficient to show significance' differs from 'not significant'."]
+    },
+    {
+      "check_type": "ml.data_leakage_contamination", "module": "experiment", "priority": 2,
+      "name": "Leakage and contamination", "name_zh": "数据泄漏与污染",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "Can test information reach training (duplicates across splits, temporal leakage, subject/patient/user overlap, preprocessing fitted on all data, label leakage via features)?",
+        "For pre-trained or foundation models: could the evaluation data be in the pre-training corpus? Is contamination analysed?"
+      ],
+      "evidence_needed": ["quotes of data collection, deduplication and split procedures"],
+      "must_not": ["A plausible leakage route is a clarification question unless the text shows it happened."]
+    },
+    {
+      "check_type": "ml.claim_scope_generalization", "module": "experiment", "priority": 2,
+      "name": "Scope and generalisation of claims", "name_zh": "主张范围与泛化",
+      "applicable_paper_types": ["empirical", "theory", "mixed"],
+      "questions": [
+        "Do 'state-of-the-art', 'general', 'robust', 'scales' or 'any domain' claims match the number and diversity of datasets, model sizes and settings evaluated?",
+        "Are failure cases and negative results reported?"
+      ],
+      "evidence_needed": ["claim quote", "list of evaluated settings quote"],
+      "must_not": ["Propose a scoped rewording rather than calling the result wrong."]
+    },
+    {
+      "check_type": "ml.reproducibility_compute", "module": "code", "priority": 2,
+      "name": "Reproducibility and compute", "name_zh": "可复现性与算力",
+      "applicable_paper_types": ["empirical", "systems", "mixed"],
+      "questions": [
+        "Are hyper-parameters, search spaces, seeds, hardware, training time/GPU-hours, parameter counts and inference cost reported for the method and baselines?",
+        "Are code, checkpoints and data (or access instructions and licences) promised or provided?"
+      ],
+      "evidence_needed": ["quotes"],
+      "must_not": ["Missing compute details are usually minor unless efficiency is a core claim."]
+    },
+    {
+      "check_type": "ml.ethics_limitations", "module": "style", "priority": 3,
+      "name": "Limitations, licences and impact", "name_zh": "局限、许可与影响",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed"],
+      "questions": ["Are limitations discussed honestly? Are dataset/model licences, personal data and potential misuse addressed where relevant?"],
+      "evidence_needed": ["quotes"],
+      "must_not": ["Do not invent venue policy requirements; cite the supplied rubric/policy if one exists."]
+    }
+  ],
+  "subfield_checks": [
+    {
+      "check_type": "ml.llm.eval_validity", "module": "experiment", "priority": 2, "subfields": ["llm_nlp", "agents"],
+      "name": "LLM evaluation validity", "name_zh": "大模型评测有效性",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "Are model versions/snapshots, decoding parameters (temperature, top-p, max tokens) and prompts (incl. few-shot exemplars) fully reported?",
+        "Do baselines receive equal prompt-engineering effort? Is sensitivity to prompt wording reported?",
+        "If LLM-as-a-judge is used: which judge, what rubric, any agreement with humans, position/length/self-preference bias controls?",
+        "For closed APIs: is non-determinism and model drift addressed? Is benchmark contamination of the evaluated models discussed?"
+      ],
+      "evidence_needed": ["quotes of prompts/decoding settings or their absence"],
+      "must_not": ["Do not assert contamination happened without evidence; ask for analysis."]
+    },
+    {
+      "check_type": "ml.agents.eval_validity", "module": "experiment", "priority": 2, "subfields": ["agents"],
+      "name": "Agent evaluation", "name_zh": "智能体评测",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "Do all agents get the same tools, environment version, step/token budget and number of attempts (pass@k vs pass@1)?",
+        "Is cost (tokens, API spend, wall time) reported alongside success rate? Could the environment leak the answer (e.g. tests visible, internet access)?"
+      ],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    },
+    {
+      "check_type": "ml.cv.benchmark_protocol", "module": "experiment", "priority": 2, "subfields": ["vision_multimodal"],
+      "name": "Vision / multimodal protocol", "name_zh": "视觉与多模态评测协议",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "Are resolution, augmentation, pre-training data, backbone and test-time augmentation matched across compared methods?",
+        "For generative models: are FID/CLIP-score style metrics computed with the same reference set, sample count and implementation? Are human evaluations described (raters, protocol)?"
+      ],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    },
+    {
+      "check_type": "ml.rl.seeds_environments", "module": "experiment", "priority": 2, "subfields": ["rl"],
+      "name": "RL evaluation", "name_zh": "强化学习评测",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": [
+        "How many seeds, and is variability (e.g. IQM, CIs, performance profiles) reported? Are environment versions, frame/step budgets and evaluation episodes consistent across methods?",
+        "Are hyper-parameters tuned per environment for the proposed method only?"
+      ],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    },
+    {
+      "check_type": "ml.theory.assumptions_rates", "module": "technical", "priority": 2, "subfields": ["ml_theory"],
+      "name": "Learning-theory assumptions", "name_zh": "学习理论假设与结论",
+      "applicable_paper_types": ["theory", "mixed"],
+      "questions": [
+        "Are assumptions (convexity, smoothness, bounded gradients, i.i.d., realisability, width/limits) stated and realistic for the experiments claimed to illustrate the theory?",
+        "Do the bounds/rates claimed in the abstract match the theorem statements, including constants and dependence on dimension or sample size?"
+      ],
+      "evidence_needed": ["theorem statement quote", "abstract/intro claim quote"],
+      "must_not": ["A gap in a proof is 'insufficient argument', not 'false theorem'."]
+    },
+    {
+      "check_type": "ml.graph.protocol", "module": "experiment", "priority": 3, "subfields": ["graph"],
+      "name": "Graph learning protocol", "name_zh": "图学习评测协议",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": ["Are transductive/inductive settings, split seeds and feature/label leakage across nodes or edges handled consistently?"],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    }
+  ]
+}

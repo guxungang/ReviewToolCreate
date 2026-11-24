@@ -1,0 +1,688 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "properties": {
+        "max_active_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Active Seconds"
+        },
+        "absolute_deadline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Absolute Deadline"
+        },
+        "max_tasks": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Tasks"
+        },
+        "max_model_requests": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Model Requests"
+        },
+        "max_input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Input Tokens"
+        },
+        "max_output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Output Tokens"
+        },
+        "max_total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Total Tokens"
+        },
+        "max_estimated_cost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Estimated Cost"
+        },
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "max_search_requests": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Search Requests"
+        },
+        "max_download_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Download Bytes"
+        },
+        "max_external_fulltexts": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max External Fulltexts"
+        },
+        "max_cpu_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Cpu Seconds"
+        },
+        "max_gpu_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Gpu Seconds"
+        },
+        "max_concurrency": {
+          "minimum": 1,
+          "title": "Max Concurrency",
+          "type": "integer"
+        },
+        "max_attempts": {
+          "minimum": 1,
+          "title": "Max Attempts",
+          "type": "integer"
+        },
+        "verification_reserve_ratio": {
+          "maximum": 0.9,
+          "minimum": 0,
+          "title": "Verification Reserve Ratio",
+          "type": "number"
+        },
+        "finalization_reserve_ratio": {
+          "maximum": 0.9,
+          "minimum": 0,
+          "title": "Finalization Reserve Ratio",
+          "type": "number"
+        },
+        "require_request_bounded_cost": {
+          "default": false,
+          "title": "Require Request Bounded Cost",
+          "type": "boolean"
+        },
+        "require_runner_enforced_time": {
+          "default": false,
+          "title": "Require Runner Enforced Time",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "max_active_seconds",
+        "absolute_deadline",
+        "max_tasks",
+        "max_model_requests",
+        "max_input_tokens",
+        "max_output_tokens",
+        "max_total_tokens",
+        "max_estimated_cost",
+        "max_search_requests",
+        "max_download_bytes",
+        "max_external_fulltexts",
+        "max_cpu_seconds",
+        "max_gpu_seconds",
+        "max_concurrency",
+        "max_attempts",
+        "verification_reserve_ratio",
+        "finalization_reserve_ratio"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "CodeRepository": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "CodeRepository",
+      "type": "object"
+    },
+    "HostSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "codex",
+            "claude",
+            "api",
+            "local"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "model": {
+          "default": "host_current",
+          "title": "Model",
+          "type": "string"
+        },
+        "required_capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Capabilities",
+          "type": "array"
+        },
+        "verify_worker": {
+          "default": "none",
+          "enum": [
+            "none",
+            "claude"
+          ],
+          "title": "Verify Worker",
+          "type": "string"
+        },
+        "worker_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Model"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "HostSpec",
+      "type": "object"
+    },
+    "InputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "manuscript": {
+          "minLength": 1,
+          "title": "Manuscript",
+          "type": "string"
+        },
+        "supplements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supplements",
+          "type": "array"
+        },
+        "source_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Files",
+          "type": "array"
+        },
+        "code_repositories": {
+          "items": {
+            "$ref": "#/$defs/CodeRepository"
+          },
+          "title": "Code Repositories",
+          "type": "array"
+        },
+        "data_files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "manuscript"
+      ],
+      "title": "InputSpec",
+      "type": "object"
+    },
+    "OutputSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "default": "zh-CN",
+          "enum": [
+            "zh-CN",
+            "en"
+          ],
+          "title": "Language",
+          "type": "string"
+        },
+        "audience": {
+          "enum": [
+            "author_private",
+            "reviewer_private",
+            "authors",
+            "editor",
+            "public"
+          ],
+          "title": "Audience",
+          "type": "string"
+        },
+        "formats": {
+          "items": {
+            "enum": [
+              "txt",
+              "md",
+              "json",
+              "html",
+              "docx"
+            ],
+            "type": "string"
+          },
+          "title": "Formats",
+          "type": "array"
+        },
+        "max_external_references": {
+          "minimum": 0,
+          "title": "Max External References",
+          "type": "integer"
+        },
+        "include_original_materials": {
+          "default": false,
+          "title": "Include Original Materials",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "audience",
+        "formats",
+        "max_external_references"
+      ],
+      "title": "OutputSpec",
+      "type": "object"
+    },
+    "Permissions": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "enum": [
+            "local_only",
+            "restricted",
+            "public"
+          ],
+          "title": "Classification",
+          "type": "string"
+        },
+        "host_model_processing": {
+          "enum": [
+            "allowed",
+            "denied"
+          ],
+          "title": "Host Model Processing",
+          "type": "string"
+        },
+        "other_model_providers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Other Model Providers",
+          "type": "array"
+        },
+        "cloud_ocr_providers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cloud Ocr Providers",
+          "type": "array"
+        },
+        "search_providers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Search Providers",
+          "type": "array"
+        },
+        "search_disclosure": {
+          "default": "public_concepts_only",
+          "enum": [
+            "public_concepts_only",
+            "title_allowed",
+            "none"
+          ],
+          "title": "Search Disclosure",
+          "type": "string"
+        },
+        "code_execution": {
+          "default": "denied",
+          "enum": [
+            "denied",
+            "approved_plans_only"
+          ],
+          "title": "Code Execution",
+          "type": "string"
+        },
+        "paid_services": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paid Services",
+          "type": "array"
+        },
+        "source_modification": {
+          "default": "denied",
+          "enum": [
+            "denied",
+            "patch_only"
+          ],
+          "title": "Source Modification",
+          "type": "string"
+        },
+        "authorization_basis": {
+          "title": "Authorization Basis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "classification",
+        "host_model_processing",
+        "authorization_basis"
+      ],
+      "title": "Permissions",
+      "type": "object"
+    },
+    "RubricSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "title": "Profile",
+          "type": "string"
+        },
+        "source_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source File"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Venue"
+        },
+        "submission_cutoff": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Submission Cutoff"
+        },
+        "score_requested": {
+          "default": false,
+          "title": "Score Requested",
+          "type": "boolean"
+        },
+        "decision_requested": {
+          "default": false,
+          "title": "Decision Requested",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "profile",
+        "source_file",
+        "venue",
+        "submission_cutoff"
+      ],
+      "title": "RubricSpec",
+      "type": "object"
+    },
+    "ScopeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "domain_profile": {
+          "enum": [
+            "generic-v1",
+            "ml-v1",
+            "systems-v1",
+            "security-v1"
+          ],
+          "title": "Domain Profile",
+          "type": "string"
+        },
+        "reviewer_expertise": {
+          "default": "general",
+          "enum": [
+            "general",
+            "generalist",
+            "specialist"
+          ],
+          "title": "Reviewer Expertise",
+          "type": "string"
+        },
+        "focus_claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Focus Claim Ids",
+          "type": "array"
+        },
+        "include_appendices": {
+          "default": true,
+          "title": "Include Appendices",
+          "type": "boolean"
+        },
+        "allow_new_experiments": {
+          "default": false,
+          "title": "Allow New Experiments",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "domain_profile"
+      ],
+      "title": "ScopeSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "workspace": {
+      "default": ".scholarly-review",
+      "title": "Workspace",
+      "type": "string"
+    },
+    "budget_account_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Budget Account Id"
+    },
+    "input": {
+      "$ref": "#/$defs/InputSpec"
+    },
+    "mode": {
+      "enum": [
+        "author",
+        "reviewer"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "effort": {
+      "enum": [
+        "quick",
+        "standard",
+        "deep",
+        "reproduction",
+        "custom"
+      ],
+      "title": "Effort",
+      "type": "string"
+    },
+    "execution_mode": {
+      "enum": [
+        "interactive",
+        "managed"
+      ],
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "host": {
+      "$ref": "#/$defs/HostSpec"
+    },
+    "scope": {
+      "$ref": "#/$defs/ScopeSpec"
+    },
+    "budget": {
+      "$ref": "#/$defs/Budget"
+    },
+    "permissions": {
+      "$ref": "#/$defs/Permissions"
+    },
+    "rubric": {
+      "$ref": "#/$defs/RubricSpec"
+    },
+    "outputs": {
+      "$ref": "#/$defs/OutputSpec"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "title": "Extensions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "budget_account_id",
+    "input",
+    "mode",
+    "effort",
+    "execution_mode",
+    "host",
+    "scope",
+    "budget",
+    "permissions",
+    "rubric",
+    "outputs"
+  ],
+  "title": "RunConfig",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

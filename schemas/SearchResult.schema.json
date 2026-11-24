@@ -1,0 +1,200 @@
+{
+  "$defs": {
+    "LiteratureRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Title"
+        },
+        "authors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Authors"
+        },
+        "first_public_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Public Date"
+        },
+        "version_public_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Version Public Date"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Venue"
+        },
+        "identifiers": {
+          "additionalProperties": true,
+          "title": "Identifiers",
+          "type": "object"
+        },
+        "links": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Links",
+          "type": "array"
+        },
+        "access_level": {
+          "enum": [
+            "metadata",
+            "abstract",
+            "partial_fulltext",
+            "fulltext",
+            "supplied_primary",
+            "local_computation"
+          ],
+          "title": "Access Level",
+          "type": "string"
+        },
+        "abstract": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Abstract"
+        }
+      },
+      "required": [
+        "source_id",
+        "title",
+        "authors",
+        "first_public_date",
+        "version_public_date",
+        "venue",
+        "identifiers",
+        "links",
+        "access_level"
+      ],
+      "title": "LiteratureRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "records": {
+      "items": {
+        "$ref": "#/$defs/LiteratureRecord"
+      },
+      "title": "Records",
+      "type": "array"
+    },
+    "provider_status": {
+      "enum": [
+        "success",
+        "partial",
+        "failed"
+      ],
+      "title": "Provider Status",
+      "type": "string"
+    },
+    "error_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error Reason"
+    },
+    "complete": {
+      "title": "Complete",
+      "type": "boolean"
+    },
+    "truncation": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Truncation"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    },
+    "queries": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Queries",
+      "type": "array"
+    },
+    "retrieved_at": {
+      "title": "Retrieved At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "records",
+    "provider_status",
+    "error_reason",
+    "complete",
+    "truncation",
+    "next_cursor",
+    "queries",
+    "retrieved_at"
+  ],
+  "title": "SearchResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

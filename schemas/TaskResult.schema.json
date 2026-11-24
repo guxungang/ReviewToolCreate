@@ -1,0 +1,192 @@
+{
+  "$defs": {
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "reported_total_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reported Total Tokens"
+        },
+        "cost_amount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Amount"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "basis": {
+          "default": "unknown",
+          "enum": [
+            "observed",
+            "estimated",
+            "unknown"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "provider_call_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Provider Call Ids",
+          "type": "array"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "title": "Task Id",
+      "type": "string"
+    },
+    "attempt_id": {
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "lease_generation": {
+      "title": "Lease Generation",
+      "type": "integer"
+    },
+    "input_fingerprint": {
+      "title": "Input Fingerprint",
+      "type": "string"
+    },
+    "execution_status": {
+      "enum": [
+        "completed",
+        "partial",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Execution Status",
+      "type": "string"
+    },
+    "result_artifact_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Result Artifact Id"
+    },
+    "result_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Result Sha256"
+    },
+    "evidence_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "usage": {
+      "$ref": "#/$defs/Usage"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "incomplete_reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Incomplete Reasons",
+      "type": "array"
+    }
+  },
+  "required": [
+    "task_id",
+    "attempt_id",
+    "lease_generation",
+    "input_fingerprint",
+    "execution_status",
+    "result_artifact_id",
+    "result_sha256",
+    "evidence_ids",
+    "usage",
+    "error",
+    "warnings",
+    "incomplete_reasons"
+  ],
+  "title": "TaskResult",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

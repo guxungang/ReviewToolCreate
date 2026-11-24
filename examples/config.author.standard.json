@@ -1,0 +1,15 @@
+{
+  "input": {"manuscript": "examples/papers/synthetic_ml_paper.md", "supplements": []},
+  "mode": "author",
+  "effort": "standard",
+  "execution_mode": "interactive",
+  "host": {"name": "claude", "model": "host_current", "required_capabilities": []},
+  "scope": {"domain_profile": "ml-v1", "reviewer_expertise": "general", "allow_new_experiments": false},
+  "permissions": {"classification": "restricted", "host_model_processing": "allowed",
+                  "search_providers": ["arxiv", "openalex"], "search_disclosure": "public_concepts_only",
+                  "code_execution": "denied", "authorization_basis": "explicit_request"},
+  "rubric": {"profile": "ml-v1", "source_file": null, "venue": null, "submission_cutoff": "2026-05-01",
+             "score_requested": false, "decision_requested": false},
+  "outputs": {"language": "zh-CN", "audience": "author_private", "formats": ["txt", "md", "json", "html"],
+              "max_external_references": 4, "include_original_materials": false}
+}

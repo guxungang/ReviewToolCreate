@@ -1,0 +1,194 @@
+{
+  "$defs": {
+    "ExperimentPlanDraft": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "run_variant": {
+          "enum": [
+            "original",
+            "environment_adapted",
+            "patched"
+          ],
+          "title": "Run Variant",
+          "type": "string"
+        },
+        "entrypoint": {
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "arguments": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Arguments",
+          "type": "array"
+        },
+        "working_directory": {
+          "title": "Working Directory",
+          "type": "string"
+        },
+        "resources": {
+          "additionalProperties": true,
+          "title": "Resources",
+          "type": "object"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/MetricRule"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "claim_ids",
+        "run_variant",
+        "entrypoint",
+        "arguments",
+        "working_directory",
+        "resources",
+        "metrics",
+        "timeout_seconds",
+        "rationale"
+      ],
+      "title": "ExperimentPlanDraft",
+      "type": "object"
+    },
+    "MetricRule": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "definition": {
+          "title": "Definition",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unit"
+        },
+        "reported_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reported Value"
+        },
+        "comparison": {
+          "enum": [
+            "exact",
+            "rounded_interval",
+            "absolute",
+            "relative",
+            "statistical",
+            "descriptive"
+          ],
+          "title": "Comparison",
+          "type": "string"
+        },
+        "absolute_tolerance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Absolute Tolerance"
+        },
+        "relative_tolerance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Tolerance"
+        },
+        "randomness_protocol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Randomness Protocol"
+        }
+      },
+      "required": [
+        "name",
+        "definition",
+        "unit",
+        "reported_value",
+        "comparison"
+      ],
+      "title": "MetricRule",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "plans": {
+      "items": {
+        "$ref": "#/$defs/ExperimentPlanDraft"
+      },
+      "title": "Plans",
+      "type": "array"
+    },
+    "static_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Static Notes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "plans"
+  ],
+  "title": "ReproducePlanOutput",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

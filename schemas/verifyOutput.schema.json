@@ -1,0 +1,225 @@
+{
+  "$defs": {
+    "QuoteRef": {
+      "additionalProperties": false,
+      "description": "A verbatim quote from one DocumentMap block; the kernel resolves match_status.",
+      "properties": {
+        "block_id": {
+          "title": "Block Id",
+          "type": "string"
+        },
+        "quote": {
+          "minLength": 3,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "quote"
+      ],
+      "title": "QuoteRef",
+      "type": "object"
+    },
+    "SubmitEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "manuscript",
+            "supplement",
+            "literature",
+            "code",
+            "user_assertion"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "content_summary": {
+          "minLength": 1,
+          "title": "Content Summary",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/QuoteRef"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "literature_source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Literature Source Id"
+        },
+        "section_hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section Hint"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "assumptions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "kind",
+        "content_summary",
+        "method"
+      ],
+      "title": "SubmitEvidence",
+      "type": "object"
+    },
+    "SubmitVerification": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "validated",
+            "invalidated",
+            "inconclusive"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        },
+        "supporting_evidence_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Supporting Evidence Keys",
+          "type": "array"
+        },
+        "counterevidence_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Counterevidence Keys",
+          "type": "array"
+        },
+        "confirmed_impact": {
+          "anyOf": [
+            {
+              "enum": [
+                "critical",
+                "major",
+                "minor",
+                "informational",
+                "not_assessed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmed Impact"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "inputs_rechecked": {
+          "default": false,
+          "title": "Inputs Rechecked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "finding_id",
+        "method",
+        "result",
+        "rationale"
+      ],
+      "title": "SubmitVerification",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "context_independence": {
+      "enum": [
+        "fresh",
+        "inherited",
+        "same_context",
+        "human"
+      ],
+      "title": "Context Independence",
+      "type": "string"
+    },
+    "blinded": {
+      "title": "Blinded",
+      "type": "boolean"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/SubmitEvidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "verifications": {
+      "items": {
+        "$ref": "#/$defs/SubmitVerification"
+      },
+      "title": "Verifications",
+      "type": "array"
+    }
+  },
+  "required": [
+    "context_independence",
+    "blinded",
+    "verifications"
+  ],
+  "title": "VerifyOutput",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,327 @@
+<title>ScholarlyReview 项目全景</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: a single reading column with full-width diagram bands; the "red-pen margin" accent marks what the kernel enforces. */
+:root{
+  --bg:#F5F6F4; --paper:#FFFFFF; --ink:#18212B; --muted:#5B6672; --line:#DCE0DD;
+  --accent:#0E6F66; --accent-soft:#E0F0EC; --pen:#B4351F; --pen-soft:#F8E6E1;
+  --warn:#9A6200; --warn-soft:#FBF0D9; --ok:#2F7A2A; --ok-soft:#E5F2E1; --idle:#8A929A; --idle-soft:#ECEEEF;
+  --display:"Space Grotesk","Noto Sans SC",system-ui,sans-serif;
+  --body:"Noto Sans SC",system-ui,-apple-system,"PingFang SC",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12171C; --paper:#1A2027; --ink:#E6EAEE; --muted:#9BA6B1; --line:#2C343D;
+  --accent:#5CC4B4; --accent-soft:#16312E; --pen:#F08A70; --pen-soft:#3A221D;
+  --warn:#E8B45A; --warn-soft:#33281A; --ok:#86CF7C; --ok-soft:#1E2E1C; --idle:#7D8790; --idle-soft:#232A31; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12171C; --paper:#1A2027; --ink:#E6EAEE; --muted:#9BA6B1; --line:#2C343D;
+  --accent:#5CC4B4; --accent-soft:#16312E; --pen:#F08A70; --pen-soft:#3A221D;
+  --warn:#E8B45A; --warn-soft:#33281A; --ok:#86CF7C; --ok-soft:#1E2E1C; --idle:#7D8790; --idle-soft:#232A31; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.75;margin:0}
+.wrap{max-width:980px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.3;margin:0}
+h1{font-size:clamp(28px,5vw,40px);font-weight:700}
+h2{font-size:22px;font-weight:700;margin-bottom:6px}
+h3{font-size:16px;font-weight:500}
+p{margin:0}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--idle-soft);padding:1px 5px;border-radius:4px}
+section{margin-top:56px;display:grid;gap:18px}
+.lede{color:var(--muted);max-width:68ch}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{font-size:13px;border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:3px 12px;font-variant-numeric:tabular-nums}
+.chip b{font-weight:500;color:var(--accent)}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:22px;font-size:13px}
+nav.toc a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--line)}
+nav.toc a:hover{color:var(--accent)}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px 18px;min-width:0}
+.card h3{margin-bottom:6px}
+.card p,.card li{font-size:14px;color:var(--muted)}
+.card ul{margin:6px 0 0;padding-left:18px}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:4px;margin-right:4px;letter-spacing:.02em}
+.t-ok{background:var(--ok-soft);color:var(--ok)}
+.t-warn{background:var(--warn-soft);color:var(--warn)}
+.t-idle{background:var(--idle-soft);color:var(--idle)}
+.t-pen{background:var(--pen-soft);color:var(--pen)}
+.t-acc{background:var(--accent-soft);color:var(--accent)}
+/* layer diagram */
+.layers{display:grid;gap:10px}
+.layer{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:start;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.layer .who{font-family:var(--display);font-weight:700;font-size:15px}
+.layer .who small{display:block;font-family:var(--mono);font-weight:400;font-size:11px;color:var(--muted)}
+.layer.kernel{border-color:var(--pen);box-shadow:inset 4px 0 0 var(--pen);border-radius:0 10px 10px 0}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:13px;border:1px solid var(--line);border-radius:6px;padding:2px 9px;background:var(--bg)}
+.between{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center}
+@media (max-width:620px){.layer{grid-template-columns:1fr}}
+/* pipeline */
+.pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.step{flex:1 1 140px;min-width:0;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;position:relative}
+.step .n{font-family:var(--mono);font-size:11px;color:var(--accent)}
+.step h3{font-size:15px;margin:2px 0 4px}
+.step p{font-size:13px;color:var(--muted);line-height:1.6}
+.step.k{background:var(--pen-soft);border-color:transparent}
+.step.k .n{color:var(--pen)}
+.step.w{background:var(--accent-soft);border-color:transparent}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+/* tables */
+.tbl{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:620px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.03em;background:var(--bg)}
+tr:last-child td{border-bottom:none}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+/* phase bar */
+.phase{display:flex;height:34px;border-radius:8px;overflow:hidden;font-size:12px;font-family:var(--mono)}
+.phase div{display:flex;align-items:center;justify-content:center;color:var(--ink);padding:0 6px;white-space:nowrap}
+.ph-a{flex:70;background:var(--accent-soft)}
+.ph-v{flex:20;background:var(--warn-soft)}
+.ph-f{flex:10;background:var(--idle-soft)}
+/* lifecycle */
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
+.node{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.arrow{color:var(--muted);font-family:var(--mono)}
+/* milestones */
+.ms{display:grid;grid-template-columns:minmax(120px,210px) 1fr 70px;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.ms:last-child{border-bottom:none}
+.ms b{font-weight:500;display:block}
+.ms span{font-size:12.5px;color:var(--muted)}
+.bar{height:9px;background:var(--idle-soft);border-radius:5px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:5px}
+.pct{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
+@media (max-width:560px){.ms{grid-template-columns:1fr 60px}.ms .bar{grid-column:1/-1;order:3}}
+.here{border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:14px 18px}
+.here b{font-family:var(--display);color:var(--accent)}
+.foot{margin-top:60px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">ScholarlyReview · v0.1 · 2026-11-23</div>
+  <h1>ScholarlyReview 项目全景</h1>
+  <p class="lede" style="margin-top:12px">一个以 AI/ML 论文为主的学术自查与审稿助手。宿主模型（Claude Code 或 Codex）读论文、做判断；本地内核 <code>sreview</code> 管任务、预算、证据和准入。凡是写进报告的结论，都有原文引用，可以追溯。</p>
+  <div class="chips">
+    <span class="chip">代码 <b>≈6,000</b> 行 Python</span>
+    <span class="chip">测试 <b>67</b> 个全部通过</span>
+    <span class="chip">真实论文试跑 <b>2</b> 篇</span>
+    <span class="chip">无人值守自跑 <b>4</b> 次</span>
+    <span class="chip">领域配置 <b>4</b> 套</span>
+  </div>
+  <nav class="toc">
+    <a href="#arch">三层架构</a><a href="#flow">一次运行的流程</a><a href="#kernel">内核模块</a>
+    <a href="#data">数据与结论生命周期</a><a href="#effort">档位与检查项</a><a href="#trust">谁负责什么</a>
+    <a href="#worker">隔离复核</a><a href="#trials">试跑记录</a><a href="#roadmap">进度与下一步</a>
+  </nav>
+</header>
+
+<section id="arch">
+  <div class="eyebrow">Architecture</div>
+  <h2>三层架构：宿主 · Skill · 内核</h2>
+  <p class="lede">它不是一个独立的 Agent。Skill 把 Claude Code 临时变成审稿 Agent，内核是它必须遵守的账本和裁判。红色边框标出的是确定性程序，不调用模型。</p>
+  <div class="layers">
+    <div class="layer">
+      <div class="who">Host 宿主<small>Claude Code / Codex</small></div>
+      <div><p style="font-size:14px;color:var(--muted)">真正读论文、做判断的大模型。用户在这里输入 <code>/paper-preflight</code> 或 <code>/paper-referee</code>。</p>
+        <div class="pills" style="margin-top:8px"><span class="pill">读稿件</span><span class="pill">提主张</span><span class="pill">做检查</span><span class="pill">公开概念检索</span><span class="pill">写候选结论</span></div></div>
+    </div>
+    <div class="between">↕ 按 Skill 的指引调用 sreview 命令，每条命令返回一个 JSON envelope</div>
+    <div class="layer">
+      <div class="who">Skill<small>paper-preflight · paper-referee</small></div>
+      <div><p style="font-size:14px;color:var(--muted)">写给宿主的操作手册：选档位、规划、领任务、提交、导出，以及不能做的事。<code>sreview install</code> 把它装进 <code>.claude/skills/</code>，项目级或用户级都可以。</p>
+        <div class="pills" style="margin-top:8px"><span class="pill">作者自查</span><span class="pill">审稿人辅助</span><span class="pill">时间与预算规则</span><span class="pill">外发边界</span></div></div>
+    </div>
+    <div class="between">↕ claim / submit / lit / verify-human / export</div>
+    <div class="layer kernel">
+      <div class="who">Kernel 内核<small>sreview · Python · SQLite</small></div>
+      <div><p style="font-size:14px;color:var(--muted)">状态、ID、预算、证据锚定、数值复算、准入规则、报告都由它负责。模型只能提交候选结论，能否进入报告由内核决定。</p>
+        <div class="pills" style="margin-top:8px"><span class="pill">任务状态机</span><span class="pill">租约与尝试次数</span><span class="pill">三段式时间门</span><span class="pill">引文锚定</span><span class="pill">数值复算</span><span class="pill">admit_finding</span><span class="pill">确定性报告</span><span class="pill">隔离 Worker</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="eyebrow">Process</div>
+  <h2>一次运行的流程</h2>
+  <p class="lede">以 <code>/paper-preflight paper.pdf</code>（quick 档，启用隔离复核）为例。宿主不断 <code>task claim</code> → 完成任务 → <code>task submit</code>，直到内核返回 <code>task: null</code>。</p>
+  <div class="pipe">
+    <div class="step k"><div class="n">01 · 内核</div><h3>导入与冻结</h3><p>PDF/MD/TXT 解析为带 block_id 的 DocumentMap，去掉行号和页眉，内容寻址去重。</p></div>
+    <div class="step k"><div class="n">02 · 内核</div><h3>plan</h3><p>合并配置，按档位生成任务，估算宿主耗时，列出权限、预算和控制等级。</p></div>
+    <div class="step"><div class="n">03 · 宿主</div><h3>understand</h3><p>提取摘要、贡献、主张（原文引用）和待查假设，识别 AI 子领域。</p></div>
+    <div class="step"><div class="n">04 · 宿主 → 内核</div><h3>numeric</h3><p>宿主只抄数字，内核用确定性程序复算，并考虑舍入区间。</p></div>
+    <div class="step"><div class="n">05 · 宿主</div><h3>checks</h3><p>主张与证据、实验有效性、领域检查等。每条结论都要附证据引用。</p></div>
+    <div class="step"><div class="n">06 · 宿主 → 内核</div><h3>literature</h3><p>只能用 <code>sreview lit</code> 查 arXiv/OpenAlex，不发送标题和原文句子。</p></div>
+    <div class="step w"><div class="n">07 · 隔离 Worker</div><h3>verify</h3><p>盲式反向复核：Worker 拿到中性问题和原文，看不到候选结论。</p></div>
+    <div class="step k"><div class="n">08 · 内核</div><h3>export</h3><p>快照、去重、准入、准备度判定，生成报告和修改计划。</p></div>
+  </div>
+  <div class="legend"><span><i class="sw" style="background:var(--pen-soft)"></i>内核（确定性）</span><span><i class="sw" style="background:var(--paper);border:1px solid var(--line)"></i>宿主模型</span><span><i class="sw" style="background:var(--accent-soft)"></i>内核启动的隔离进程</span></div>
+
+  <div class="grid g2">
+    <div class="card"><h3>主动时间分三段</h3><p style="margin-bottom:10px">时间到了，内核就不再发对应阶段的任务。quick 的上限是 600 s，下图按这个上限换算。</p>
+      <div class="phase"><div class="ph-a">分析 70% · 420 s</div><div class="ph-v">复核 20%</div><div class="ph-f">收尾</div></div>
+      <p style="margin-top:10px">停止原因写在 <code>budget_stops</code> 里。用户同意后，可以用 <code>budget set</code> 再加 <code>resume</code> 继续。</p></div>
+    <div class="card"><h3>每个任务的约束</h3><ul>
+      <li>租约 30 分钟，带代次和 task_token，过期的结果只进审计</li>
+      <li>最多 2 次尝试；被拒时返回具体错误，修改后重交</li>
+      <li>先分析后复核；重交的任务可以使用复核时段</li>
+      <li>文献检索遇到限流时会给出等待秒数，60 秒以内重试一次</li></ul></div>
+  </div>
+</section>
+
+<section id="kernel">
+  <div class="eyebrow">Kernel internals</div>
+  <h2>内核模块</h2>
+  <div class="tbl"><table>
+    <tr><th>模块</th><th>文件</th><th>行数</th><th>职责</th></tr>
+    <tr><td>核心调度</td><td class="mono">core/kernel.py</td><td class="num">1,316</td><td>plan、claim、submit、各任务类型的结果转换、复核规则、状态和暂停恢复</td></tr>
+    <tr><td>存储</td><td class="mono">core/store.py</td><td class="num">240</td><td>SQLite（BEGIN IMMEDIATE 单写者）、内容寻址 artifacts、事件日志</td></tr>
+    <tr><td>预算</td><td class="mono">core/budget.py · config.py</td><td class="num">338</td><td>原子预留、分池、跨 Run 账户、档位预设、配置合并顺序</td></tr>
+    <tr><td>准入</td><td class="mono">core/admission.py</td><td class="num">166</td><td>admit_finding（版本、证据、受众、复核实质）、准备度四值判定</td></tr>
+    <tr><td>文献</td><td class="mono">core/litops.py · modules/literature.py</td><td class="num">293</td><td>白名单 Provider、外发拦截、访问层级、限流提示</td></tr>
+    <tr><td>解析</td><td class="mono">modules/ingest.py</td><td class="num">325</td><td>PDF 文本抽取、行号/页眉剔除、标题识别、引文 exact/fuzzy 匹配</td></tr>
+    <tr><td>数值</td><td class="mono">modules/numeric.py</td><td class="num">415</td><td>混淆矩阵、变化量、比值、乘积、舍入兼容、不等式、输入舍入传播</td></tr>
+    <tr><td>报告</td><td class="mono">reports/snapshot.py · render.py</td><td class="num">706</td><td>快照、跨模块去重、覆盖统计、中英模板、HTML 转义、manifest</td></tr>
+    <tr><td>适配器</td><td class="mono">adapters/hosts.py · worker.py</td><td class="num">317</td><td>宿主能力探测、Skill 安装、隔离复核 Worker</td></tr>
+    <tr><td>接口</td><td class="mono">interfaces/cli.py · service.py</td><td class="num">337</td><td><code>sreview</code> 命令行；服务层与将来的 MCP 共用</td></tr>
+    <tr><td>模型</td><td class="mono">models/*.py</td><td class="num">710</td><td>附录 A 实体与任务输出 Schema，未知字段一律拒绝</td></tr>
+  </table></div>
+  <p style="font-size:13px;color:var(--muted)">命令：doctor · import · plan · run · status · task claim/submit · lit search/fetch · worker verify · verify-human · pause/resume/cancel · budget set · export · compare · install · schemas</p>
+</section>
+
+<section id="data">
+  <div class="eyebrow">Data model</div>
+  <h2>数据与结论的生命周期</h2>
+  <div class="grid g3">
+    <div class="card"><h3>Claim 主张</h3><p>论文的论断，必须带原文引用，锚定状态为 exact、fuzzy 或 unresolved。分 core 和 supporting 两级。</p></div>
+    <div class="card"><h3>Evidence 证据</h3><p>稿件引用、计算、文献、用户陈述。计算证据由内核生成，产物做哈希校验，被篡改的证据会被标为 corrupt。</p></div>
+    <div class="card"><h3>Assessment 评估</h3><p>某项检查对某条主张的判定：supported、insufficient_evidence 等。准备度看的是核心主张是否都被评估过。</p></div>
+    <div class="card"><h3>Finding 发现</h3><p>优点、问题或待澄清事项，有 potential_impact 和 impact，可以标为 duplicate_of 另一条发现。</p></div>
+    <div class="card"><h3>Verification 复核</h3><p>独立性分 fresh、inherited、same_context、human 四级，另记是否 blinded，结果可以确认或推翻发现。</p></div>
+    <div class="card"><h3>ExperimentPlan</h3><p>reproduction 档只生成复现计划，本版本不执行任何代码。</p></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-bottom:10px">一条问题从提出到进入报告</h3>
+    <div class="flow">
+      <span class="node">宿主提交候选</span><span class="arrow">→</span>
+      <span class="node">内核校验 Schema、证据、锚定</span><span class="arrow">→</span>
+      <span class="node">minor：直接 confirmed<br><small style="color:var(--muted)">major：生成 verify 任务</small></span><span class="arrow">→</span>
+      <span class="node">复核：validated / invalidated / inconclusive</span><span class="arrow">→</span>
+      <span class="node">admit_finding 判定受众与类别</span><span class="arrow">→</span>
+      <span class="node">报告：优点 / 已确认问题 / 待确认问题</span>
+    </div>
+    <p style="margin-top:12px;font-size:14px;color:var(--muted)">major 问题要被确认，必须满足以下之一：有确定性计算并重新核对过输入；由 <span class="tag t-acc">fresh</span> 隔离 Worker 复核；由 <span class="tag t-ok">human</span> 本人核对（<code>verify-human</code>）。同一会话自查（<span class="tag t-idle">same_context</span>）只能让它保持 unresolved。</p>
+  </div>
+</section>
+
+<section id="effort">
+  <div class="eyebrow">Scope</div>
+  <h2>档位与检查项</h2>
+  <div class="tbl"><table>
+    <tr><th>档位</th><th>主动时间</th><th>内容</th></tr>
+    <tr><td>quick</td><td class="num">10 min</td><td>理解 + 数值 + 主张与证据 + 最接近的相关工作，共 4 项（不做领域检查）</td></tr>
+    <tr><td>standard</td><td class="num">45 min</td><td>全部优先级 1–2 的检查 + AI 子领域追加检查</td></tr>
+    <tr><td>deep</td><td class="num">120 min</td><td>再加优先级 3（参考文献、清晰度、伦理等），扩大检索和复核范围</td></tr>
+    <tr><td>reproduction</td><td class="num">240 min</td><td>再加复现计划（不执行代码）</td></tr>
+  </table></div>
+  <div class="grid g2">
+    <div class="card"><h3>ml-v1（默认）</h3><p>通用检查之外，还有 eval_protocol、baseline_fairness、ablation_attribution（优先级 1）；statistical_rigor、data_leakage、claim_scope、reproducibility_compute（优先级 2）；ethics（优先级 3）。</p>
+      <p style="margin-top:6px">按子领域自动追加：LLM 评测有效性、Agent 评测、CV benchmark、RL 种子与环境、理论假设与收敛率、图学习评测协议。</p></div>
+    <div class="card"><h3>其他配置</h3><p><b style="font-weight:500">generic-v1</b>：主张与证据、技术可靠性、实验有效性、新颖性、内部一致性、可复现性、参考文献、清晰度。</p>
+      <p style="margin-top:6px"><b style="font-weight:500">systems-v1</b>：模型与决策一致性、资源可行性、负载与测试床、基线配置、开销与尾延迟。<b style="font-weight:500">security-v1</b>：威胁模型、能力一致性、攻击覆盖、自适应攻击、伦理披露。</p></div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="eyebrow">Trust boundaries</div>
+  <h2>谁负责什么</h2>
+  <div class="tbl"><table>
+    <tr><th>事项</th><th>由谁决定</th><th>说明</th></tr>
+    <tr><td>ID、状态、预算、租约</td><td><span class="tag t-pen">内核</span></td><td>模型提交的 key 由内核换成正式 ID；过期或被替代的提交只进审计</td></tr>
+    <tr><td>引文是否在原文中</td><td><span class="tag t-pen">内核</span></td><td>每条引用都与 DocumentMap 比对，标记 exact、fuzzy 或 unresolved</td></tr>
+    <tr><td>数字是否对得上</td><td><span class="tag t-pen">内核</span></td><td>宿主只抄写数字，内核计算；输入必须逐字出现在引用里</td></tr>
+    <tr><td>复核的独立性</td><td><span class="tag t-pen">内核</span></td><td>不采信自述；隔离与否由内核检查 Worker 的会话记录来判定</td></tr>
+    <tr><td>能否进入报告、给谁看</td><td><span class="tag t-pen">内核</span></td><td>admit_finding 和准备度判定；报告用确定性模板生成，不让模型润色</td></tr>
+    <tr><td>读论文、发现问题、写措辞</td><td><span class="tag t-acc">宿主模型</span></td><td>审稿质量取决于这一层，目前尚未评测</td></tr>
+    <tr><td>宿主自身的用量和工具</td><td><span class="tag t-warn">无法约束</span></td><td>交互模式下内核只能管住经它签发的任务，报告头如实列出</td></tr>
+    <tr><td>外发内容</td><td><span class="tag t-pen">内核</span> + <span class="tag t-acc">Skill</span></td><td>检索词拦截标题和长句；Skill 禁止使用其他网络工具（属于协作约束）</td></tr>
+  </table></div>
+</section>
+
+<section id="worker">
+  <div class="eyebrow">Isolated verification</div>
+  <h2>隔离复核 Worker</h2>
+  <div class="grid g2">
+    <div class="card"><h3>怎么隔离</h3><ul>
+      <li>每个复核任务使用一个新的临时目录，里面只有说明、上下文（不含候选结论）、Schema 和稿件</li>
+      <li><code>claude -p --tools Read --strict-mcp-config --setting-sources local --no-session-persistence --json-schema …</code></li>
+      <li>读取目录外的文件会被拒绝；自动记忆指向一个空目录；用完即删除副本</li></ul></div>
+    <div class="card"><h3>怎么判定</h3><ul>
+      <li>检查 init 事件里的工具集、MCP 和 cwd</li>
+      <li>检查每一次 Read 的路径，以及 permission_denials</li>
+      <li>全部通过才记为 <span class="tag t-acc">fresh</span> + blinded，否则降为 <span class="tag t-idle">inherited</span></li>
+      <li>报告注明“同一模型家族的新上下文，不是统计独立的审稿人”</li></ul></div>
+  </div>
+  <p style="font-size:14px;color:var(--muted)">实测 4 次复核全部判定为隔离。每次 25–37 s、0.24–0.36 美元。Worker 确认了 BLEU 41.8/41.0 不一致，但把影响评为 minor；同一会话复核时评的是 major。</p>
+</section>
+
+<section id="trials">
+  <div class="eyebrow">Evidence so far</div>
+  <h2>试跑记录</h2>
+  <div class="tbl"><table>
+    <tr><th>日期</th><th>运行</th><th>结果</th><th>暴露并修复的问题</th></tr>
+    <tr><td class="num">11-22</td><td>Transformer 论文 · quick · 我手动当宿主</td><td>12 条主张全部精确锚定；找到 BLEU 41.8/41.0 和 Luong 93.0 两处真实矛盾</td><td>跨行连字符、标题误判、舍入与不等式、预算分池、arXiv 查询</td></tr>
+    <tr><td class="num">11-22</td><td>作者未发表稿件 · standard</td><td>24 条主张；20 项数值全部一致；3 条 major 待你确认</td><td>ICLR 行号和页眉、输入舍入传播、附录识别、原因码本地化</td></tr>
+    <tr><td class="num">11-23</td><td>自跑 1 · quick · 无人值守</td><td>流程完整，但只完成 2/9 项，partial</td><td>复核抢占分析时间、重交被挡、停止原因不清楚</td></tr>
+    <tr><td class="num">11-23</td><td>自跑 2 · quick</td><td>5/9 项，停止原因报告正确</td><td>文献限流时没有提示等待</td></tr>
+    <tr><td class="num">11-23</td><td>自跑 3 · quick（精简为 4 项）</td><td>4/4 + 3 项复核，458 s / 600 s</td><td>数值发现和措辞发现重复</td></tr>
+    <tr><td class="num">11-23</td><td>自跑 4 · quick + 隔离 Worker</td><td>4/4 + 4 次 fresh 复核；准备度 conditional</td><td>宿主把 Worker 放到后台、method 前缀被覆盖、报告头措辞</td></tr>
+  </table></div>
+  <p style="font-size:13px;color:var(--muted)">每次 quick 自跑：宿主约 2.5–3 美元，约 9 分钟；隔离复核另计约 0.3 美元一次。</p>
+</section>
+
+<section id="roadmap">
+  <div class="eyebrow">Roadmap</div>
+  <h2>进度与下一步</h2>
+  <div class="card" style="padding:6px 18px">
+    <div class="ms"><div><b>M1 内核与输入</b><span>状态机、预算、PDF/MD/TXT</span></div><div class="bar"><i style="width:90%;background:var(--ok)"></i></div><div class="pct">~90%</div></div>
+    <div class="ms"><div><b>M2 交互模式与报告</b><span>Skill、复核、中英报告</span></div><div class="bar"><i style="width:92%;background:var(--ok)"></i></div><div class="pct">~90%</div></div>
+    <div class="ms"><div><b>Skill 无人值守自跑</b><span>4 次无头会话验证</span></div><div class="bar"><i style="width:100%;background:var(--ok)"></i></div><div class="pct">完成</div></div>
+    <div class="ms"><div><b>M3 隔离复核 Worker</b><span>claude -p，已实测</span></div><div class="bar"><i style="width:100%;background:var(--ok)"></i></div><div class="pct">完成</div></div>
+    <div class="ms"><div><b>M3 整体 managed + MCP</b><span>全部任务交给 Worker、Codex 适配</span></div><div class="bar"><i style="width:10%;background:var(--warn)"></i></div><div class="pct">~10%</div></div>
+    <div class="ms"><div><b>质量评测</b><span>OpenReview 对照，精确率和召回率</span></div><div class="bar"><i style="width:0%"></i></div><div class="pct">未开始</div></div>
+    <div class="ms"><div><b>M4 多格式与代码</b><span>LaTeX、DOCX、跨版本比较</span></div><div class="bar"><i style="width:0%"></i></div><div class="pct">未开始</div></div>
+  </div>
+  <div class="here"><b>我们在这里</b><p style="margin-top:4px;font-size:14px">工具已经能独立跑通，过程可审计，major 问题也能由隔离进程确认。还不知道的是：它找到的问题和真实审稿人指出的问题有多少重合。</p></div>
+  <div class="grid g3">
+    <div class="card"><span class="tag t-pen">建议优先</span><h3 style="margin-top:6px">小规模质量评测</h3><p>选 5–10 篇有公开审稿意见的 OpenReview 论文，计算精确率和召回率，以此决定接下来是加强检查项还是收紧准入。约 100 美元，可以在后台批量跑。</p></div>
+    <div class="card"><span class="tag t-idle">之后</span><h3 style="margin-top:6px">LaTeX 源码输入</h3><p>表格单元格和公式能读准，数值复算的覆盖面会明显扩大。</p></div>
+    <div class="card"><span class="tag t-idle">之后</span><h3 style="margin-top:6px">完整 managed 模式</h3><p>分析任务也交给 Worker，费用按请求封顶，并适配 Codex。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Known limits</div>
+  <h2>已知限制</h2>
+  <div class="grid g2">
+    <div class="card"><ul>
+      <li>审稿质量没有经过评测，不能声称达标</li>
+      <li>图片里的数值读不到；表格来自纯文本抽取</li>
+      <li>不支持 LaTeX、DOCX、OCR；不执行代码</li></ul></div>
+    <div class="card"><ul>
+      <li>交互模式无法计量宿主自身的用量和费用</li>
+      <li>订阅登录用不了 <code>--bare</code>，Worker 仍会加载插件列表（但没有工具可以调用它们）</li>
+      <li>工作区放在 OneDrive 等同步盘上时，SQLite 锁不保证可靠</li></ul></div>
+  </div>
+</section>
+
+<p class="foot">数据来源：docs/IMPLEMENTATION_STATUS.md、测试套件与 2026-11-22/23 试跑记录。百分比为粗略估计。</p>
+</div>

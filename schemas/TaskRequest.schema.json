@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "InputArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "read_scope": {
+          "title": "Read Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "sha256",
+        "read_scope"
+      ],
+      "title": "InputArtifactRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "workspace_id": {
+      "title": "Workspace Id",
+      "type": "string"
+    },
+    "paper_id": {
+      "title": "Paper Id",
+      "type": "string"
+    },
+    "paper_version_id": {
+      "title": "Paper Version Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "task_id": {
+      "title": "Task Id",
+      "type": "string"
+    },
+    "attempt_id": {
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "lease_generation": {
+      "title": "Lease Generation",
+      "type": "integer"
+    },
+    "task_token": {
+      "title": "Task Token",
+      "type": "string"
+    },
+    "task_type": {
+      "enum": [
+        "understand",
+        "check",
+        "numeric_extract",
+        "literature",
+        "verify",
+        "reproduce_plan",
+        "report"
+      ],
+      "title": "Task Type",
+      "type": "string"
+    },
+    "check_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Check Type"
+    },
+    "execution_role": {
+      "const": "worker",
+      "default": "worker",
+      "title": "Execution Role",
+      "type": "string"
+    },
+    "parent_run_id": {
+      "title": "Parent Run Id",
+      "type": "string"
+    },
+    "input_artifacts": {
+      "items": {
+        "$ref": "#/$defs/InputArtifactRef"
+      },
+      "title": "Input Artifacts",
+      "type": "array"
+    },
+    "prompt_version": {
+      "title": "Prompt Version",
+      "type": "string"
+    },
+    "output_schema_id": {
+      "title": "Output Schema Id",
+      "type": "string"
+    },
+    "allowed_paths": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Paths",
+      "type": "array"
+    },
+    "permitted_tools": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Permitted Tools",
+      "type": "array"
+    },
+    "policy_id": {
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "budget_allocation": {
+      "additionalProperties": true,
+      "title": "Budget Allocation",
+      "type": "object"
+    },
+    "deadline": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Deadline"
+    },
+    "context_independence": {
+      "enum": [
+        "fresh",
+        "inherited",
+        "same_context",
+        "human"
+      ],
+      "title": "Context Independence",
+      "type": "string"
+    },
+    "output_staging_directory": {
+      "title": "Output Staging Directory",
+      "type": "string"
+    }
+  },
+  "required": [
+    "workspace_id",
+    "paper_id",
+    "paper_version_id",
+    "run_id",
+    "task_id",
+    "attempt_id",
+    "lease_generation",
+    "task_token",
+    "task_type",
+    "check_type",
+    "parent_run_id",
+    "input_artifacts",
+    "prompt_version",
+    "output_schema_id",
+    "allowed_paths",
+    "permitted_tools",
+    "policy_id",
+    "budget_allocation",
+    "deadline",
+    "context_independence",
+    "output_staging_directory"
+  ],
+  "title": "TaskRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

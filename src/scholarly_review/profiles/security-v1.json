@@ -1,0 +1,60 @@
+{
+  "profile_id": "security-v1",
+  "version": "1.0.0",
+  "domain": "security_privacy",
+  "extends": "generic-v1",
+  "source_urls": [],
+  "retrieved_at": null,
+  "valid_from": "2026-11-22",
+  "submission_cutoff": null,
+  "policy_refs": [],
+  "score_scales": [],
+  "venue_note": "Venue criteria and ethics/disclosure policies (USENIX Security, IEEE S&P, CCS, NDSS, ...) must be supplied via rubric.source_file.",
+  "criteria": [
+    {"criterion_id": "sec_threat_model", "name": "Threat model", "description": "Attacker goals, knowledge and capabilities are explicit and consistent with the evaluation.", "applicable_paper_types": ["empirical", "systems", "theory", "mixed"], "required_evidence_types": ["manuscript"], "default_checks": ["security.threat_model", "security.capability_consistency"]},
+    {"criterion_id": "sec_evaluation", "name": "Security evaluation", "description": "Attacks and defences are evaluated against adaptive and realistic adversaries.", "applicable_paper_types": ["empirical", "systems", "mixed"], "required_evidence_types": ["manuscript"], "default_checks": ["security.attack_coverage", "security.adaptive_attacks"]}
+  ],
+  "checks": [
+    {
+      "check_type": "security.threat_model", "module": "technical", "priority": 1,
+      "name": "Threat model", "name_zh": "威胁模型",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed"],
+      "questions": ["Are trust assumptions, attacker goals, knowledge (white/grey/black-box) and capabilities stated explicitly? Are out-of-scope attacks named?"],
+      "evidence_needed": ["threat-model quote"],
+      "must_not": []
+    },
+    {
+      "check_type": "security.capability_consistency", "module": "technical", "priority": 1,
+      "name": "Capability consistency", "name_zh": "攻击者能力一致性",
+      "applicable_paper_types": ["empirical", "systems", "mixed"],
+      "questions": ["Does the evaluation grant the attacker exactly the stated capabilities (not more for attacks, not less for defences)?"],
+      "evidence_needed": ["threat model quote", "evaluation setup quote"],
+      "must_not": []
+    },
+    {
+      "check_type": "security.attack_coverage", "module": "experiment", "priority": 1,
+      "name": "Attack coverage vs. defence goals", "name_zh": "攻击覆盖与防御目标",
+      "applicable_paper_types": ["empirical", "systems", "mixed"],
+      "questions": ["Do the evaluated attacks cover the defence's stated goals? Are security claims scoped to the evaluated attack classes?"],
+      "evidence_needed": ["quotes"],
+      "must_not": []
+    },
+    {
+      "check_type": "security.adaptive_attacks", "module": "experiment", "priority": 2,
+      "name": "Adaptive attackers", "name_zh": "自适应攻击",
+      "applicable_paper_types": ["empirical", "mixed"],
+      "questions": ["For defences (including adversarial-ML defences): is an adaptive attacker that knows the defence evaluated? Any signs of gradient masking or obfuscation?"],
+      "evidence_needed": ["quotes"],
+      "must_not": ["Absence of an adaptive attack is a gap in evidence, not proof the defence is broken."]
+    },
+    {
+      "check_type": "security.ethics_disclosure", "module": "style", "priority": 2,
+      "name": "Ethics and disclosure", "name_zh": "伦理与漏洞披露",
+      "applicable_paper_types": ["empirical", "systems", "mixed"],
+      "questions": ["Were vulnerabilities responsibly disclosed? Were human subjects or live systems involved with appropriate approval?"],
+      "evidence_needed": ["quotes"],
+      "must_not": ["Do not invent venue policy text."]
+    }
+  ],
+  "subfield_checks": []
+}

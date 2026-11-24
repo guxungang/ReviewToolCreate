@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scholarly-review"
+version = "0.1.0"
+description = "ScholarlyReview: evidence-traceable pre-submission self-check and peer-review assistant (AI-first)"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7,<3",
+  "pypdf>=4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+sreview = "scholarly_review.interfaces.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+scholarly_review = [
+  "profiles/*.json",
+  "prompts/*.md",
+  "skill_sources/*/*.md",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

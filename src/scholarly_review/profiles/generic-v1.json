@@ -1,0 +1,122 @@
+{
+  "profile_id": "generic-v1",
+  "version": "1.0.0",
+  "domain": "generic_computing",
+  "extends": null,
+  "source_urls": [],
+  "retrieved_at": null,
+  "valid_from": "2026-11-22",
+  "submission_cutoff": null,
+  "policy_refs": [],
+  "score_scales": [],
+  "criteria": [
+    {"criterion_id": "significance", "name": "Significance", "description": "Importance of the problem and of the contribution to the field.", "applicable_paper_types": ["empirical", "systems", "theory", "mixed"], "required_evidence_types": ["manuscript", "literature"], "default_checks": ["core.claim_evidence", "core.novelty_positioning"]},
+    {"criterion_id": "novelty", "name": "Novelty", "description": "Technical difference from directly related prior work; absence of found prior work is not proof of first proposal.", "applicable_paper_types": ["empirical", "systems", "theory", "mixed"], "required_evidence_types": ["literature", "manuscript"], "default_checks": ["core.novelty_positioning"]},
+    {"criterion_id": "soundness", "name": "Technical soundness", "description": "Definitions, assumptions, derivations and algorithms are consistent with the claims.", "applicable_paper_types": ["empirical", "systems", "theory", "mixed"], "required_evidence_types": ["manuscript", "calculation"], "default_checks": ["core.technical_soundness"]},
+    {"criterion_id": "evidence", "name": "Evidence quality", "description": "Experiments, proofs or measurements actually support each core claim within its stated scope.", "applicable_paper_types": ["empirical", "systems", "theory", "mixed"], "required_evidence_types": ["manuscript", "calculation"], "default_checks": ["core.claim_evidence", "core.experimental_validity", "numeric"]},
+    {"criterion_id": "reproducibility", "name": "Reproducibility", "description": "Enough detail, code, data and settings to reproduce the main results.", "applicable_paper_types": ["empirical", "systems", "mixed"], "required_evidence_types": ["manuscript", "code"], "default_checks": ["core.reproducibility"]},
+    {"criterion_id": "clarity", "name": "Clarity", "description": "Presentation, internal consistency and correct citation.", "applicable_paper_types": ["empirical", "systems", "theory", "mixed", "survey", "position"], "required_evidence_types": ["manuscript"], "default_checks": ["core.internal_consistency", "core.references", "core.clarity"]}
+  ],
+  "checks": [
+    {
+      "check_type": "core.claim_evidence", "module": "experiment", "priority": 1,
+      "name": "Claim-evidence alignment", "name_zh": "主张与证据对应",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed"],
+      "questions": [
+        "For each core claim: which specific table, figure, theorem or section supports it, and under which conditions?",
+        "Is the claim stated more broadly than the evidence (datasets, settings, model scales, populations) supports?",
+        "Are qualifiers in the original text (e.g. 'in most settings', 'on average') preserved in the abstract and conclusion?"
+      ],
+      "evidence_needed": ["verbatim quote of the claim", "verbatim quote of the supporting or conflicting result"],
+      "must_not": ["Do not add universal quantifiers the authors did not write.", "Absence of a problem found is not proof that all properties hold."]
+    },
+    {
+      "check_type": "core.technical_soundness", "module": "technical", "priority": 1,
+      "name": "Method and theory soundness", "name_zh": "方法与理论正确性",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed"],
+      "questions": [
+        "Are variables, domains, assumptions and constraints defined before use and used consistently?",
+        "Does the algorithm description match what the claims and experiments rely on?",
+        "For each theorem: are the conditions stated; is a proof or proof sketch provided; are there gaps?"
+      ],
+      "evidence_needed": ["quotes of definitions/assumptions", "the exact step that fails or is missing"],
+      "must_not": [
+        "A missing proof is 'insufficient argument', not 'the theorem is false'.",
+        "A counterexample refutes a proposition only if it satisfies the proposition's own conditions.",
+        "Finite tests passing do not prove a general theorem.",
+        "Non-convexity, integer variables or an algorithm's running time alone do not prove NP-hardness."
+      ]
+    },
+    {
+      "check_type": "core.experimental_validity", "module": "experiment", "priority": 1,
+      "name": "Experimental validity", "name_zh": "实验有效性",
+      "applicable_paper_types": ["empirical", "systems", "mixed"],
+      "questions": [
+        "Does each research question map to an experiment that can answer it?",
+        "Are splits, baselines, hyper-parameters and resources described well enough to judge fairness?",
+        "When several factors change at once, is the gain attributed to only one of them?"
+      ],
+      "evidence_needed": ["quotes of the setup and of the result table/caption"],
+      "must_not": [
+        "A missing experiment is a major issue only if it affects a specific claim.",
+        "Lack of isolation evidence does not show a component is useless or that data are fabricated."
+      ]
+    },
+    {
+      "check_type": "core.novelty_positioning", "module": "literature", "priority": 1,
+      "name": "Novelty and positioning", "name_zh": "创新性与相关工作定位",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed"],
+      "questions": [
+        "Which closest prior works does the paper itself cite, and how does it state its difference?",
+        "Using `sreview lit search` with public concepts only: are there directly comparable works not discussed?",
+        "Was a found work public before the submission cutoff? Is enough of its content read to judge technical equivalence?"
+      ],
+      "evidence_needed": ["literature evidence with access_level", "the paper's own positioning quote"],
+      "must_not": [
+        "Same model name or keyword is not technical equivalence.",
+        "Title/DOI/authors only establish identity; technical criticism needs enough full text.",
+        "Work made public after the submission cutoff is background, not a missing citation.",
+        "Never search the manuscript title or distinctive sentences for an anonymous submission."
+      ]
+    },
+    {
+      "check_type": "core.internal_consistency", "module": "consistency", "priority": 2,
+      "name": "Internal consistency", "name_zh": "内部一致性",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed"],
+      "questions": [
+        "Do dataset names, sample counts, metrics, method names and table/figure numbers agree across abstract, method, results, appendix and conclusion?",
+        "Do numbers quoted in the text match the tables?"
+      ],
+      "evidence_needed": ["both conflicting quotes with block ids"],
+      "must_not": ["A suspected label swap needs cross-checking with sample counts and recomputable metrics; close numbers alone are not proof."]
+    },
+    {
+      "check_type": "core.reproducibility", "module": "code", "priority": 2,
+      "name": "Reproducibility information", "name_zh": "可复现信息",
+      "applicable_paper_types": ["empirical", "systems", "mixed"],
+      "questions": [
+        "Are code, data, environment, hyper-parameters, seeds and hardware stated?",
+        "Could an expert re-run the main experiment from the paper and appendix alone?"
+      ],
+      "evidence_needed": ["quotes of what is and is not provided"],
+      "must_not": ["Not being able to run something is not evidence the paper is wrong."]
+    },
+    {
+      "check_type": "core.references", "module": "reference", "priority": 3,
+      "name": "Citation integrity", "name_zh": "引用核查",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed", "survey", "position"],
+      "questions": ["Do key citations exist and do they support the sentence they are attached to?"],
+      "evidence_needed": ["reference entry quote", "citing sentence quote", "literature record when checked"],
+      "must_not": ["A missing DOI does not make a reference fake.", "A preprint and its published version are one contribution."]
+    },
+    {
+      "check_type": "core.clarity", "module": "style", "priority": 3,
+      "name": "Presentation", "name_zh": "表达与结构",
+      "applicable_paper_types": ["empirical", "systems", "theory", "mixed", "survey", "position"],
+      "questions": ["Are there unclear definitions, logical jumps or terminology drift that hinder understanding of the contribution?"],
+      "evidence_needed": ["quotes"],
+      "must_not": ["Style preferences are minor; never list language polishing as a major concern."]
+    }
+  ],
+  "subfield_checks": []
+}
