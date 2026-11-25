@@ -52,6 +52,7 @@ def test_reviewer_form_draft_is_validated_and_kept_from_authors(kernel, paper):
     ctx = json.loads(Path(r["files"]["context"]).read_text())
     assert [s["criterion_id"] for s in ctx["rubric"]["score_scales"]][:2] == ["soundness", "significance"]
     assert ctx["rubric"]["decision_options"][0] == "reject"
+    assert not any(x.startswith("assess") for x in ctx["coverage"]["incomplete"])  # never counts itself
     fid = next(f["finding_id"] for f in ctx["admitted_findings"] if f["category"] == "confirmed_concern")
 
     bad = {"output": {"scores": [{"criterion_id": "soundness", "value": "5", "rationale": "x"},

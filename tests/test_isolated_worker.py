@@ -375,3 +375,9 @@ def test_cost_shape_shared_prefix_warmup_and_batched_verification(kernel, paper)
     sizes = [len(json.loads(t["payload_json"])["finding_ids"])
              for t in k.ws.q("SELECT payload_json FROM tasks WHERE run_id=? AND type='verify'", (run_id,))]
     assert all(n <= VERIFY_BATCH for n in sizes)
+
+
+def test_nul_bytes_from_pdf_text_never_reach_the_command_line(tmp_path):
+    cmd, stdin = worker.engine_call("claude", "claude", "{}", None, tmp_path, "task\x00part", "manu\x00script")
+    assert all("\x00" not in a for a in cmd) and "\x00" not in stdin
+    assert cmd[cmd.index("--append-system-prompt") + 1] == "manuscript"

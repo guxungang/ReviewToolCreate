@@ -742,13 +742,20 @@ class Kernel:
                           "claim_ids": f["claim_ids"]})
         form = summary.get("rubric") or {}
         cs = snap["coverage_summary"]
+        incomplete = self._incomplete_before_assess(cs)
         return {"rubric": {"profile_id": form.get("profile_id"), "venue": cfg["rubric"].get("venue"),
                            "criteria": form.get("criteria"), "score_scales": form.get("score_scales") or [],
                            "decision_options": form.get("decision_options") if cfg["rubric"].get("decision_requested") else None,
                            "scores_requested": bool(cfg["rubric"].get("score_requested"))},
                 "admitted_findings": items,
-                "coverage": {"incomplete": cs["incomplete"], "core_claims": cs["core_claims_extracted"],
-                             "core_claims_checked": cs["core_claims_checked"], "partial_run": snap["is_partial"]}}
+                "coverage": {"incomplete": incomplete, "core_claims": cs["core_claims_extracted"],
+                             "core_claims_checked": cs["core_claims_checked"],
+                             "partial_run": bool(incomplete) or not cs["core_coverage_complete"]}}
+
+    @staticmethod
+    def _incomplete_before_assess(cs: dict) -> list[str]:
+        """The assess task itself is running while it is drafted: it is not a gap of the review."""
+        return [x for x in cs["incomplete"] if not x.startswith("assess")]
 
     def _calc_payload(self, ev: dict) -> Optional[dict]:
         if ev["kind"] != "calculation" or not ev.get("payload_artifact_id"):
@@ -1400,7 +1407,9 @@ class Kernel:
             "scores": [s.model_dump() for s in out.scores],
             "recommendation": rec.model_dump() if rec else None,
             "editor_note": out.editor_note, "not_assessed": out.not_assessed,
-            "based_on_partial_run": bool(snap["is_partial"]), "task_id": task["task_id"],
+            "based_on_partial_run": bool(self._incomplete_before_assess(snap["coverage_summary"]))
+                                    or not snap["coverage_summary"]["core_coverage_complete"],
+            "task_id": task["task_id"],
         }
         plan["run_summary"] = summary
 

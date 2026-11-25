@@ -96,6 +96,9 @@ def engine_call(engine: str, binary: str, schema: str, model: Optional[str], sta
                 prompt: str, system: Optional[str] = None) -> tuple[list[str], str]:
     """(command, stdin) for one worker call. Claude: the shared part goes in the cached system prompt.
     Codex: one stdin text with the shared part first (OpenAI caches identical prompt prefixes)."""
+    # PDF text can carry NUL bytes, which a command-line argument cannot hold (2026-11-25 run)
+    system = system.replace("\x00", "") if system else system
+    prompt = prompt.replace("\x00", "")
     if engine == "codex":
         text = (system + "\n\n" if system else "") + prompt + "\n\n" + CODEX_NOTE + "\n" + schema
         return _codex_command(binary, model, stage), text
