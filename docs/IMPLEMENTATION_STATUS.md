@@ -217,6 +217,27 @@
 
 按上一次运行的用量估算，每篇约 $2.5–3，降幅约 65%。还没有真实重跑来确认。之后成本的大头会是检查的输出 token。
 
+## 审稿严重度校准（2026-11-25）
+
+**起因：** 三份审稿结论不一致。两篇投稿我人工给了大修；稿件 C 投的期刊门槛更高，工具却给了小修。同一类问题的严重度也不一样，例如"基线调参没交代"在 稿件 A 里是 major，在稿件 C 里是 minor。另外，推荐意见没有按期刊的选项含义来对应。
+
+**修法：**
+1. **check 提示词加入统一的严重度表：** 泄漏、混杂的核心贡献、基线公平性、单次运行、"按需提供"的主打数据集等，每一类问题对应固定的影响级别。要求只评判问题本身，不看论文整体质量、期刊或作者；需要新实验的问题标为 `add_evidence`。
+2. **推荐意见按含义（`decision_semantics`）判：** 每个选项映射到 reject/major/minor/accept。只要存在需要新实验的已确认 major 问题，或存在已确认的 critical 问题，内核就拒绝 minor 和 accept 级别的推荐；有已确认的 major 问题时，拒绝 accept。表单里不认识的选项一律按 major 处理。
+3. **没有期刊表单也走同一流程：** `--recommendation` 使用通用选项（Reject / Major revision / Minor revision / Accept），不再由宿主自己给结论。
+4. **assess 提示词：** 按去重后的问题来判，不看条数；应用表单里的 `venue_bar`，门槛更高的期刊不能对同样的问题给出更宽松的结论；不猜作者是谁。
+5. **referee Skill：** 原样转述系统给出的推荐意见；如果用户就是作者，结果标注为 "author self-review (simulated referee)"。
+
+**重判结果：** 只重跑评审表单这一步，每篇约 $0.22–0.26，三篇都是一次通过，没有被内核退回。
+
+| 稿件 | 之前 | 之后 |
+|---|---|---|
+| 稿件 C（门槛更高的期刊） | Accept pending minor revision | Reject/Resubmit (major revision and new external review required) |
+| 稿件 A | 大修（宿主人工给出） | Major revision（通用选项） |
+| 稿件 B | 大修（宿主人工给出） | Major revision（通用选项） |
+
+**局限：** 这些检查结果是在校准之前生成的，问题的严重度没有重新判定。要让新的严重度表真正生效，需要重跑检查。
+
 ## 上游与许可
 
 v0.1 **没有复制** paper-review.skill、PaperDoctor、Open ScholarPeer 的任何代码或文本。检查项和提示词按规范独立编写，见 `third_party/SOURCES.md`。

@@ -8,21 +8,103 @@
   "submission_cutoff": null,
   "note": "GENERIC TEMPLATE, not any venue's official form. Replace it with the venue's current review form (criteria, scales and decision options) before relying on scores.",
   "criteria": [
-    {"criterion_id": "soundness", "description": "Are the claims supported by the methods, experiments and analysis?"},
-    {"criterion_id": "significance", "description": "Does the work matter for the field if its claims hold?"},
-    {"criterion_id": "originality", "description": "Is the contribution new relative to the closest prior work?"},
-    {"criterion_id": "clarity", "description": "Is the paper clear enough to understand and reproduce?"}
+    {
+      "criterion_id": "soundness",
+      "description": "Are the claims supported by the methods, experiments and analysis?"
+    },
+    {
+      "criterion_id": "significance",
+      "description": "Does the work matter for the field if its claims hold?"
+    },
+    {
+      "criterion_id": "originality",
+      "description": "Is the contribution new relative to the closest prior work?"
+    },
+    {
+      "criterion_id": "clarity",
+      "description": "Is the paper clear enough to understand and reproduce?"
+    }
   ],
   "score_scales": [
-    {"criterion_id": "soundness", "allowed_values": ["1", "2", "3", "4"], "required": true,
-     "value_definitions": {"1": "poor: central claims unsupported", "2": "fair: important gaps", "3": "good: minor gaps", "4": "excellent"}},
-    {"criterion_id": "significance", "allowed_values": ["1", "2", "3", "4"], "required": true,
-     "value_definitions": {"1": "poor", "2": "fair", "3": "good", "4": "excellent"}},
-    {"criterion_id": "originality", "allowed_values": ["1", "2", "3", "4"], "required": true,
-     "value_definitions": {"1": "poor: known result", "2": "fair: incremental", "3": "good", "4": "excellent: clearly new"}},
-    {"criterion_id": "clarity", "allowed_values": ["1", "2", "3", "4"], "required": false,
-     "value_definitions": {"1": "poor", "2": "fair", "3": "good", "4": "excellent"}}
+    {
+      "criterion_id": "soundness",
+      "allowed_values": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "required": true,
+      "value_definitions": {
+        "1": "poor: central claims unsupported",
+        "2": "fair: important gaps",
+        "3": "good: minor gaps",
+        "4": "excellent"
+      }
+    },
+    {
+      "criterion_id": "significance",
+      "allowed_values": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "required": true,
+      "value_definitions": {
+        "1": "poor",
+        "2": "fair",
+        "3": "good",
+        "4": "excellent"
+      }
+    },
+    {
+      "criterion_id": "originality",
+      "allowed_values": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "required": true,
+      "value_definitions": {
+        "1": "poor: known result",
+        "2": "fair: incremental",
+        "3": "good",
+        "4": "excellent: clearly new"
+      }
+    },
+    {
+      "criterion_id": "clarity",
+      "allowed_values": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "required": false,
+      "value_definitions": {
+        "1": "poor",
+        "2": "fair",
+        "3": "good",
+        "4": "excellent"
+      }
+    }
   ],
-  "decision_options": ["reject", "weak_reject", "borderline", "weak_accept", "accept"],
-  "policy_refs": []
+  "decision_options": [
+    "reject",
+    "weak_reject",
+    "borderline",
+    "weak_accept",
+    "accept"
+  ],
+  "policy_refs": [],
+  "decision_semantics": {
+    "reject": "reject",
+    "weak_reject": "reject",
+    "borderline": "major",
+    "weak_accept": "minor",
+    "accept": "accept"
+  },
+  "venue_bar": "Generic ML conference template: not a specific venue's bar."
 }

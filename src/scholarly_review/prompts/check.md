@@ -29,6 +29,20 @@ Every check must be able to report three kinds of result: evidence that **suppor
      never `critical` by itself. Provide `neutral_question` - a question a verifier can answer from the original
      **without seeing your conclusion** (e.g. "Does the appendix contain an ablation that removes X while keeping
      the data size fixed?"). Major/critical concerns are re-checked before they can be reported as confirmed.
+     **Use the same severity for the same kind of problem in every paper** (calibration, 2026-11-25):
+
+     | problem | impact |
+     | --- | --- |
+     | train/test leakage or test data used for design/selection, if it can change a headline result | `critical` if the headline cannot hold, else `major` |
+     | a stated contribution or headline claim is confounded or not supported by the experiments | `major` |
+     | baseline parity undocumented (tuning, inputs, budget) while the reported gain is small (a few points) | `major` |
+     | single run / no variance while the gain is within plausible run-to-run noise | `major` |
+     | a dataset or code that is itself a headline contribution is only "available on request" | `major` |
+     | the same, when it is not a contribution | `minor` |
+     | wording stronger than the evidence on a side remark; missing related work; presentation | `minor` |
+
+     Judge the problem, not the paper's overall quality, the venue or who might have written it.
+     Use `action_type: add_evidence` when fixing it needs a new experiment or analysis, not only rewording.
    - `clarification`: something whose answer could change the judgement; phrase it as a real question, without
      a factual presupposition you have not established.
    - `recommended_action` + `action_type` (`correct_fact`, `add_evidence`, `clarify_scope`, `improve_writing`).

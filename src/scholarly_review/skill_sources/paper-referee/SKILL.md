@@ -125,6 +125,12 @@ sreview export --run <run_id> --audience authors    # draft comments to authors 
 sreview export --run <run_id> --audience editor     # only if the reviewer asks for confidential editor notes
 ```
 
+**Same flow for every paper.** When the reviewer wants a verdict, always add `--recommendation` (with the
+venue form if there is one; otherwise the kernel uses the generic options Reject / Major revision / Minor
+revision / Accept). Never give a verdict of your own instead of the validated draft. Report it as returned,
+with the distinct issues behind it; do not soften or harden it, and do not mention or use who wrote the
+paper. If the user is the author, label the result "author self-review (simulated referee)".
+
 Explain: Summary, Strengths, Major Concerns, Minor Comments, Questions, References; which concerns are
 confirmed vs open questions; coverage limits. A recommendation exists only as the validated form draft
 (`--recommendation` with a venue form); never compute one yourself from issue counts. Do not

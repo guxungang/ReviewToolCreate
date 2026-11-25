@@ -39,6 +39,29 @@ TOKEN_ESTIMATE = {"understand": 20000, "check": 9000, "literature": 12000, "nume
 HOST_SECONDS_ESTIMATE = {"understand": 140, "numeric_extract": 70, "check": 90, "literature": 110,
                          "reproduce_plan": 150, "verify": 30, "assess": 60}
 VERIFY_BATCH = 6  # findings per verification task
+# used when a reviewer asks for a recommendation without a venue form (same flow for every paper)
+GENERIC_DECISIONS = ["Reject", "Major revision", "Minor revision", "Accept"]
+DECISION_RANK = {"reject": 0, "major": 1, "minor": 2, "accept": 3}
+
+
+def decision_semantics(option: str) -> str:
+    """Map a venue's decision label to reject / major / minor / accept (a label such as 'Reject/Resubmit (major
+    revision ...)' is a major revision)."""
+    o = option.lower()
+    for key in ("minor", "major", "reject", "accept"):
+        if key in o:
+            return key
+    return "major"  # unknown label: treated as a revision; forms should state decision_semantics
+
+
+def decision_options(summary: dict) -> tuple[list[str], dict[str, str], str]:
+    form = summary.get("rubric") or {}
+    opts = [str(o) for o in form.get("decision_options") or []]
+    source = "venue form"
+    if not opts:
+        opts, source = list(GENERIC_DECISIONS), "generic (no venue form supplied)"
+    sem = dict(form.get("decision_semantics") or {})
+    return opts, {o: sem.get(o) or decision_semantics(o) for o in opts}, source
 ANALYSIS_WORKER_TYPES = ("understand", "numeric_extract", "check", "reproduce_plan", "literature")
 
 
@@ -231,8 +254,8 @@ class Kernel:
         if cfg.rubric.score_requested and not (rubric and rubric["score_scales"]):
             warnings.append("scores requested but no valid score scale was supplied: scoring stays not_assessed")
         if cfg.rubric.decision_requested and not (rubric and rubric.get("decision_options")):
-            warnings.append("a recommendation was requested but the form defines no decision_options: "
-                            "no recommendation is drafted")
+            warnings.append("a recommendation was requested without venue decision options: the generic "
+                            "options Reject / Major revision / Minor revision / Accept are used")
         if (cfg.rubric.score_requested or cfg.rubric.decision_requested) and cfg.mode != "reviewer":
             warnings.append("scores and recommendations are drafted in reviewer mode only")
         if cfg.permissions.code_execution != "denied":
@@ -610,7 +633,7 @@ class Kernel:
         if cfg["mode"] != "reviewer" or not (rub.get("score_requested") or rub.get("decision_requested")):
             return False
         form = (json.loads(run["summary_json"] or "{}").get("rubric") or {})
-        if not (form.get("score_scales") or (rub.get("decision_requested") and form.get("decision_options"))):
+        if not (form.get("score_scales") or rub.get("decision_requested")):
             return False
         return not c.execute("SELECT 1 FROM tasks WHERE run_id=? AND type='assess'", (run["run_id"],)).fetchone()
 
@@ -743,9 +766,13 @@ class Kernel:
         form = summary.get("rubric") or {}
         cs = snap["coverage_summary"]
         incomplete = self._incomplete_before_assess(cs)
+        opts, sem, source = decision_options(summary)
         return {"rubric": {"profile_id": form.get("profile_id"), "venue": cfg["rubric"].get("venue"),
-                           "criteria": form.get("criteria"), "score_scales": form.get("score_scales") or [],
-                           "decision_options": form.get("decision_options") if cfg["rubric"].get("decision_requested") else None,
+                           "venue_bar": form.get("venue_bar"), "criteria": form.get("criteria"),
+                           "score_scales": (form.get("score_scales") or []) if cfg["rubric"].get("score_requested") else [],
+                           "decision_options": opts if cfg["rubric"].get("decision_requested") else None,
+                           "decision_semantics": sem if cfg["rubric"].get("decision_requested") else None,
+                           "decision_source": source,
                            "scores_requested": bool(cfg["rubric"].get("score_requested"))},
                 "admitted_findings": items,
                 "coverage": {"incomplete": incomplete, "core_claims": cs["core_claims_extracted"],
@@ -1377,10 +1404,10 @@ class Kernel:
             if missing:
                 errors.append(f"required criteria without a score (use 'not_assessed' with a reason): {missing}")
         rec = out.recommendation
-        options = [str(o) for o in form.get("decision_options") or []]
+        options, sem, dsource = decision_options(summary)
         if rec is not None:
-            if not cfg["rubric"].get("decision_requested") or not options:
-                errors.append("a recommendation was not requested or the form defines no decision_options")
+            if not cfg["rubric"].get("decision_requested"):
+                errors.append("a recommendation was not requested for this run")
             elif rec.value not in options:
                 errors.append(f"recommendation {rec.value!r} is not one of {options}")
             else:
@@ -1399,13 +1426,25 @@ class Kernel:
                                   f"or critical concern supports it; cite them or choose another option")
                 if serious and not set(rec.finding_ids) & set(serious) and rec.value != options[-1]:
                     errors.append(f"the recommendation must cite the confirmed major/critical concerns it rests on: {serious}")
-        elif cfg["rubric"].get("decision_requested") and options:
+                # calibration (2026-11-25): the decision follows what the confirmed concerns require
+                level = sem.get(rec.value, "major")
+                new_work = [f["finding_id"] for f in concerns if f["impact"] in ("critical", "major") and (
+                    (f.get("extensions") or {}).get("action_type") == "add_evidence"
+                    or (f.get("extensions") or {}).get("issue_type") in ("missing_experiment", "leakage"))]
+                if critical and DECISION_RANK[level] > DECISION_RANK["major"]:
+                    errors.append(f"{rec.value!r} is a {level} decision although confirmed critical concerns stand: {critical}")
+                if new_work and DECISION_RANK[level] > DECISION_RANK["major"]:
+                    errors.append(f"{rec.value!r} is a {level} decision, but confirmed major concerns need new "
+                                  f"experiments or analyses {new_work}: that is a major revision at most")
+                if serious and level == "accept":
+                    errors.append(f"{rec.value!r} accepts without changes although confirmed major concerns stand: {serious}")
+        elif cfg["rubric"].get("decision_requested"):
             errors.append("a recommendation was requested: give one of the decision_options")
         summary["reviewer_assessment"] = {
             "status": "draft for the reviewer to adopt or edit; never submitted automatically",
             "form": form.get("profile_id"), "venue": cfg["rubric"].get("venue"),
             "scores": [s.model_dump() for s in out.scores],
-            "recommendation": rec.model_dump() if rec else None,
+            "recommendation": (rec.model_dump() | {"level": sem.get(rec.value), "options_source": dsource}) if rec else None,
             "editor_note": out.editor_note, "not_assessed": out.not_assessed,
             "based_on_partial_run": bool(self._incomplete_before_assess(snap["coverage_summary"]))
                                     or not snap["coverage_summary"]["core_coverage_complete"],

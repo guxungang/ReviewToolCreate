@@ -85,10 +85,24 @@ def test_reviewer_form_draft_is_validated_and_kept_from_authors(kernel, paper):
     assert "Sound within SST-B" not in authors
 
 
-def test_no_form_no_scores(kernel, paper):
+def test_without_a_form_only_generic_decisions_never_scores(kernel, paper):
     k = kernel
     run_id, pv = plan_and_start(k, paper, mode="reviewer", effort="quick",
-                                rubric={"score_requested": True, "decision_requested": True,
-                                        "submission_cutoff": "2026-05-01"})
+                                rubric={"score_requested": True, "submission_cutoff": "2026-05-01"})
     with k.ws.tx() as c:
         assert k._needs_assessment(c, k._run(run_id)) is False  # scales are never invented
+    run2, _ = plan_and_start(k, paper, mode="reviewer", effort="quick",
+                             rubric={"decision_requested": True, "submission_cutoff": "2026-05-01"})
+    with k.ws.tx() as c:
+        assert k._needs_assessment(c, k._run(run2)) is True  # same flow for every paper: generic options
+
+
+def test_decision_semantics_follow_the_label_not_its_position():
+    from scholarly_review.core.kernel import decision_options, decision_semantics
+    assert decision_semantics("Reject/Resubmit (major revision and new external review required)") == "major"
+    assert decision_semantics("Accept pending minor revision") == "minor"
+    assert decision_semantics("Accept without changes") == "accept"
+    assert decision_semantics("weak_reject") == "reject" and decision_semantics("borderline") == "major"
+    opts, sem, src = decision_options({})
+    assert opts == ["Reject", "Major revision", "Minor revision", "Accept"] and src.startswith("generic")
+    assert [sem[o] for o in opts] == ["reject", "major", "minor", "accept"]

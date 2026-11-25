@@ -32,3 +32,18 @@ Rules:
   "not_assessed": ["presentation: not part of this run's checks"]
 }, "usage": {"basis": "unknown"}}
 ```
+
+## Calibration (apply the same way to every paper)
+
+1. Group findings that state the same problem and judge **distinct issues**, never the number of findings.
+2. Decide what the confirmed concerns *require*, then map that to the venue's options using
+   `rubric.decision_semantics` (reject / major / minor / accept):
+   - a confirmed critical concern, or a headline result that cannot stand -> reject or major;
+   - a confirmed major concern that needs a new experiment or analysis (`action_type: add_evidence`), or an
+     open major question whose unfavourable answer would undermine a headline result -> **major** at most;
+   - only rewording, clarification or small additions -> minor;
+   - nothing material -> accept.
+   The kernel rejects a minor/accept decision while confirmed major concerns need new experiments.
+3. Apply `rubric.venue_bar` to novelty and significance. A more selective venue never gets a milder
+   decision for the same issues.
+4. You do not know who wrote the paper; do not guess, and do not soften or harden for any author.
