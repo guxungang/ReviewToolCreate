@@ -9,3 +9,6 @@ trial_reports/
 .claude/
 *.bak
 .DS_Store
+
+# private manuscripts placed in the project root
+/*.pdf
